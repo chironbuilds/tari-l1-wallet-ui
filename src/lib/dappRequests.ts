@@ -172,6 +172,15 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         operation.relatedComponents ?? [],
         maxFee,
       );
+    case "redeemStealthOutputAndExecute":
+      return account.redeemStealthOutputAndExecute(
+        operation.resourceAddress,
+        operation.commitmentHex,
+        BigInt(operation.revealedAmount),
+        operation.followUpInstructions as never[],
+        operation.relatedComponents ?? [],
+        maxFee,
+      );
     case "shield":
       return account.shield(
         operation.resourceAddress,
@@ -280,6 +289,17 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         resourceAddress: stringField("resourceAddress"),
         amount: amountField("amount"),
         workspaceVarName: stringField("workspaceVarName"),
+        followUpInstructions: p.followUpInstructions,
+        relatedComponents: p.relatedComponents as string[] | undefined,
+        maxFee: p.maxFee as string | undefined,
+      };
+    case "redeemStealthOutputAndExecute":
+      if (!Array.isArray(p.followUpInstructions)) throw new Error("followUpInstructions must be an array.");
+      return {
+        kind: "redeemStealthOutputAndExecute",
+        resourceAddress: stringField("resourceAddress"),
+        commitmentHex: stringField("commitmentHex"),
+        revealedAmount: amountField("revealedAmount"),
         followUpInstructions: p.followUpInstructions,
         relatedComponents: p.relatedComponents as string[] | undefined,
         maxFee: p.maxFee as string | undefined,

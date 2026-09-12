@@ -117,6 +117,11 @@ export function capabilitiesFor(origin: string | null) {
   return {
     exactInputSelection: true,
     stealthWithdraw: true,
+    /** The `redeemStealthOutputAndExecute` operation kind — spends one specific, externally-known
+     * stealth commitment (e.g. a ballot/ticket token minted directly to this wallet by another
+     * party) into a dApp's own contract call. Always true here, same reasoning as `stealthWithdraw`
+     * above. */
+    stealthRedeem: true,
     htlcFund: true,
     /** `htlcClaim`/`htlcRefund` — the other half of `htlcFund`, reachable as transaction-request
      * operation kinds. */
@@ -206,6 +211,20 @@ export type TransactionRequestOperation =
       resourceAddress: string;
       amount: string;
       workspaceVarName: string;
+      followUpInstructions: unknown[];
+      relatedComponents?: string[];
+      maxFee?: string;
+    }
+  /** Spends one specific, externally-known stealth commitment (e.g. a ballot/ticket token some
+   * other party minted directly to this wallet's address, as opposed to `withdrawStealthAndExecute`'s
+   * *amount* drawn from this account's own tracked vault balance) into a dApp's own follow-up
+   * contract call. `revealedAmount` must be the output's actual value, known from whatever
+   * protocol minted it — there is no client-side way to discover it otherwise. */
+  | {
+      kind: "redeemStealthOutputAndExecute";
+      resourceAddress: string;
+      commitmentHex: string;
+      revealedAmount: string;
       followUpInstructions: unknown[];
       relatedComponents?: string[];
       maxFee?: string;
@@ -522,6 +541,11 @@ export function describeOperation(operation: TransactionRequestOperation): strin
     case "withdrawStealthAndExecute":
       return [
         `Reveal ${operation.amount} of ${shortId(operation.resourceAddress)} for use in this transaction`,
+        `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
+      ];
+    case "redeemStealthOutputAndExecute":
+      return [
+        `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
         `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
       ];
     case "shield":
