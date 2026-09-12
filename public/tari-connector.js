@@ -182,8 +182,8 @@
      * logic inside a CallFunction/CallMethod (a voting template's ballot tokens, for instance).
      * Costs more per page than scanForPrivatePayments (it fetches each candidate transaction's full
      * result), so maxPages/pageSize default to a small lookback. */
-    scanForResourceUtxos: function (resourceAddress, maxPages, pageSize) {
-      return request("tari_scanForResourceUtxos", { resourceAddress: resourceAddress, maxPages: maxPages, pageSize: pageSize });
+    scanForResourceUtxos: function (resourceAddress, maxPages, pageSize, limit) {
+      return request("tari_scanForResourceUtxos", { resourceAddress: resourceAddress, maxPages: maxPages, pageSize: pageSize, limit: limit });
     },
 
     // ---- Transactions ------------------------------------------------------------------------
