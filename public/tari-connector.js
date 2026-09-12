@@ -177,6 +177,14 @@
     claimPrivatePayment: function (resourceAddress, commitment) {
       return request("tari_claimPrivatePayment", { resourceAddress: resourceAddress, commitment: commitment });
     },
+    /** Like scanForPrivatePayments, but for one specific resourceAddress and not limited to outputs
+     * from a native StealthTransfer instruction — it also finds a UTXO minted by custom template
+     * logic inside a CallFunction/CallMethod (a voting template's ballot tokens, for instance).
+     * Costs more per page than scanForPrivatePayments (it fetches each candidate transaction's full
+     * result), so maxPages/pageSize default to a small lookback. */
+    scanForResourceUtxos: function (resourceAddress, maxPages, pageSize) {
+      return request("tari_scanForResourceUtxos", { resourceAddress: resourceAddress, maxPages: maxPages, pageSize: pageSize });
+    },
 
     // ---- Transactions ------------------------------------------------------------------------
     //

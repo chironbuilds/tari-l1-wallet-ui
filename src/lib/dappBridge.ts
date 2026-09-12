@@ -50,6 +50,7 @@ export type BridgeMethod =
   | "tari_getPrivateBalances"
   | "tari_getShieldedOutputs"
   | "tari_scanForPrivatePayments"
+  | "tari_scanForResourceUtxos"
   | "tari_claimPrivatePayment"
   // ---- Ownership proof (spends nothing) ----
   | "tari_signOwnershipChallenge"
@@ -84,6 +85,7 @@ export const VIEW_METHODS: BridgeMethod[] = [
   "tari_getPrivateBalances",
   "tari_getShieldedOutputs",
   "tari_scanForPrivatePayments",
+  "tari_scanForResourceUtxos",
   "tari_claimPrivatePayment",
 ];
 

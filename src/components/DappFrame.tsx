@@ -361,6 +361,17 @@ export function DappFrame({
               storeRef.current.refreshL2();
               return { result: { claimed, found } };
             }
+            case "tari_scanForResourceUtxos": {
+              const resourceAddress = String(params.resourceAddress ?? "");
+              if (!resourceAddress) return { error: ERROR.internal("resourceAddress is required") };
+              const maxPages = typeof params.maxPages === "number" ? params.maxPages : undefined;
+              const pageSize = typeof params.pageSize === "number" ? params.pageSize : undefined;
+              const found = await account.scanForResourceUtxos(resourceAddress, { maxPages, pageSize });
+              // Same reasoning as tari_scanForPrivatePayments above: a scan that discovers real
+              // outputs must be reflected in the wallet's own view, not only handed to the dApp.
+              storeRef.current.refreshL2();
+              return { result: { claimed: found.length, found } };
+            }
             case "tari_claimPrivatePayment": {
               const result = await account.claimPrivatePayment(String(params.resourceAddress ?? ""), String(params.commitment ?? ""));
               storeRef.current.refreshL2();
