@@ -20,9 +20,10 @@ export const FEATURES_AND_SCRIPTS_BYTES = 300;
 export function parseAddress(input: string): WasmTariAddress | null {
   const s = input.trim();
   if (!s) return null;
+  // Emoji-ID parsing isn't supported by this wasm build (only the Tari Universe desktop app
+  // decodes emoji IDs) — trying it here would misrepresent a broken encoding as "invalid address".
   const attempts = [
     () => WasmTariAddress.fromBase58(s),
-    () => WasmTariAddress.fromEmoji(s),
     () => WasmTariAddress.fromHex(s),
   ];
   for (const attempt of attempts) {

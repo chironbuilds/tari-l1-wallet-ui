@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import {
+  Clock,
   Download,
   Eye,
   EyeOff,
   Globe,
   History,
+  KeyRound,
   Loader2,
+  Lock,
   Package,
   Radar,
   ShieldCheck,
@@ -15,11 +18,20 @@ import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
 import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
+import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { useToast } from "./toast";
 import { Badge, Button, Card, CopyButton, Field, Segmented, TextInput } from "./ui";
 import { connectedSites, revokeConnection, revokeViewAccess } from "../lib/dappBridge";
 import { forgetOrigin } from "../lib/dappRequests";
 import { detectedCores, maxWorkers, threadOptions } from "../lib/threads";
+
+const AUTO_LOCK_OPTIONS = [
+  { value: 1, label: "1 min" },
+  { value: 5, label: "5 min" },
+  { value: 15, label: "15 min" },
+  { value: 30, label: "30 min" },
+  { value: 0, label: "Never" },
+];
 
 export function SettingsPanel() {
   const store = useStore();
@@ -31,6 +43,11 @@ export function SettingsPanel() {
   const [scanFrom, setScanFrom] = useState("");
   const [scanTo, setScanTo] = useState("");
   const [tip, setTip] = useState<number | null>(null);
+  const [oldPin, setOldPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [newPinConfirm, setNewPinConfirm] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   // Read once on mount and re-read after each change rather than subscribed to: these live in
   // localStorage, which fires no event for same-document writes, and they only change when the user
   // acts here or answers a prompt in a dApp frame.
@@ -66,6 +83,38 @@ export function SettingsPanel() {
     setWordsBusy(false);
   }
 
+  async function submitPin() {
+    setPinError(null);
+    if (newPin.length < MIN_PIN_LENGTH) {
+      setPinError(`PIN must be at least ${MIN_PIN_LENGTH} characters.`);
+      return;
+    }
+    if (newPin !== newPinConfirm) {
+      setPinError("New PINs don't match.");
+      return;
+    }
+    setPinBusy(true);
+    try {
+      if (store.hasPin) {
+        const ok = await store.changePin(oldPin, newPin);
+        if (!ok) {
+          setPinError("Current PIN is incorrect.");
+          setPinBusy(false);
+          return;
+        }
+        toast({ tone: "success", title: "PIN changed" });
+      } else {
+        await store.setPin(newPin);
+        toast({ tone: "success", title: "PIN set", message: "You can now lock this wallet." });
+      }
+      setOldPin("");
+      setNewPin("");
+      setNewPinConfirm("");
+    } finally {
+      setPinBusy(false);
+    }
+  }
+
   if (!store.network) return null;
 
   return (
@@ -99,6 +148,72 @@ export function SettingsPanel() {
           </Button>
           {revealWords && words && (
             <CopyButton text={words.join(" ")} label="Copy phrase" />
+          )}
+        </div>
+      </Card>
+
+      <Card className="h-fit p-6 sm:p-7">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
+          <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
+            <Lock size={15} />
+          </span>
+          Lock
+        </h3>
+        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
+          {store.hasPin
+            ? "Your seed is encrypted on this device with your PIN. Locking hides the wallet and clears the decrypted seed from memory without erasing anything — unlock with the same PIN."
+            : "Set a PIN to encrypt your seed on this device and enable locking. Without a PIN, this wallet can only be erased, not locked."}
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          {store.hasPin && (
+            <Field label="Current PIN">
+              <TextInput
+                type="password"
+                inputMode="numeric"
+                value={oldPin}
+                onChange={(e) => setOldPin(e.target.value)}
+              />
+            </Field>
+          )}
+          <Field label={store.hasPin ? "New PIN" : "Choose a PIN"}>
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value)}
+            />
+          </Field>
+          <Field label="Confirm">
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={newPinConfirm}
+              onChange={(e) => setNewPinConfirm(e.target.value)}
+            />
+          </Field>
+          <Button variant="outline" onClick={() => void submitPin()} disabled={pinBusy || !newPin}>
+            {pinBusy && <Loader2 size={14} className="animate-spin" />}
+            <KeyRound size={14} /> {store.hasPin ? "Change PIN" : "Set PIN"}
+          </Button>
+        </div>
+        {pinError && <p className="mt-3 text-xs text-[var(--st-red)]">{pinError}</p>}
+
+        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
+          <Field label="Auto-lock after inactivity">
+            <Segmented
+              value={String(store.autoLockMinutes)}
+              onChange={(v) => store.setAutoLockMinutes(Number(v))}
+              options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+            />
+          </Field>
+        </div>
+
+        <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--tari-border)] pt-4">
+          <Button variant="outline" size="sm" disabled={!store.hasPin} onClick={() => store.lock()}>
+            <Clock size={14} /> Lock now
+          </Button>
+          {!store.hasPin && (
+            <span className="text-[11px] text-zinc-600">Set a PIN above to enable this.</span>
           )}
         </div>
       </Card>

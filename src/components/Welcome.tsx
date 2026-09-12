@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { KeyRound, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { KeyRound, Lock, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
 import { useStore } from "../store";
 import { isPlausibleSeedPhrase, seedPhraseToWallet } from "../lib/cipherseed";
-import { Button, Card, Field, Logo, Segmented } from "./ui";
+import { MIN_PIN_LENGTH } from "../lib/pinLock";
+import { Button, Card, Field, Logo, Segmented, TextInput } from "./ui";
 import { useToast } from "./toast";
 
 type ImportMode = "create" | "seed" | "backup";
@@ -13,6 +14,8 @@ export function Welcome() {
   const [mode, setMode] = useState<ImportMode>("create");
   const [backup, setBackup] = useState("");
   const [seedInput, setSeedInput] = useState("");
+  const [pin, setPin] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,10 +24,20 @@ export function Welcome() {
   const go = async () => {
     setBusy(true);
     setError(null);
+    if (pin.length < MIN_PIN_LENGTH) {
+      setError(`Choose a PIN of at least ${MIN_PIN_LENGTH} characters — it locks and unlocks this wallet.`);
+      setBusy(false);
+      return;
+    }
+    if (pin !== pinConfirm) {
+      setError("PINs don't match.");
+      setBusy(false);
+      return;
+    }
     await new Promise((r) => setTimeout(r, 400));
     try {
       if (mode === "create") {
-        createWallet("mainnet");
+        await createWallet("mainnet", pin);
         toast({
           tone: "success",
           title: "Wallet created",
@@ -37,7 +50,7 @@ export function Welcome() {
           return;
         }
         const { backupHex, birthdayMs } = await seedPhraseToWallet(seedInput);
-        const err = restoreWallet(backupHex, "mainnet");
+        const err = await restoreWallet(backupHex, "mainnet", pin);
         if (err) {
           setError(err);
           setBusy(false);
@@ -55,7 +68,7 @@ export function Welcome() {
           setBusy(false);
           return;
         }
-        const err = restoreWallet(backup, "mainnet");
+        const err = await restoreWallet(backup, "mainnet", pin);
         if (err) {
           setError(err);
           setBusy(false);
@@ -75,7 +88,7 @@ export function Welcome() {
 
   return (
     <div
-      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10"
+      className="relative z-10 flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10"
       style={{ background: "var(--tari-bg)" }}
     >
       <div className="logo-pulse mb-8">
@@ -169,6 +182,32 @@ export function Welcome() {
             <span className="text-[10px] text-[#7CD9A7]">layer 1 · minotari</span>
           </div>
         </Field>
+
+        <div className="animate-fade-up mt-5 grid grid-cols-2 gap-3">
+          <Field label="Choose a PIN" hint={`At least ${MIN_PIN_LENGTH} characters`}>
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+              placeholder="••••"
+            />
+          </Field>
+          <Field label="Confirm PIN">
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={pinConfirm}
+              onChange={(e) => setPinConfirm(e.target.value)}
+              placeholder="••••"
+            />
+          </Field>
+        </div>
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-zinc-600">
+          <Lock size={12} className="mt-0.5 shrink-0" />
+          Encrypts your seed on this device and lets you lock the wallet without erasing it.
+          There's no reset — losing both your PIN and your recovery phrase loses the funds.
+        </p>
 
         {error && (
           <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-red-300">

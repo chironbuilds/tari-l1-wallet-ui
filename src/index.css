@@ -24,6 +24,13 @@
   --tari-btn-primary: linear-gradient(180deg, #2a2a2e 0%, #0c0c0e 100%);
   --tari-btn-primary-hover: linear-gradient(180deg, #3a3a40 0%, #1b1b1b 100%);
   --tari-shadow: 0 10px 40px -8px rgba(0, 0, 0, 0.14);
+  /* Semantic status colors, referenced as var(--st-*) throughout — match the literal hex values
+     already used alongside them everywhere (badge backgrounds/borders, button gradients). */
+  --st-green: #06c983;
+  --st-red: #ef4444;
+  --st-amber: #e2712d;
+  --st-violet: var(--tari-purple);
+  --st-cyan: #22d3ee;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -123,6 +130,10 @@ textarea:focus-visible {
   box-shadow: var(--tari-shadow);
   backdrop-filter: blur(18px);
   border: 1px solid var(--tari-border);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .btn-primary {
@@ -179,6 +190,10 @@ textarea:focus-visible {
   background: var(--tari-bg-deep);
   border: 1px solid var(--tari-border);
   box-shadow: var(--tari-shadow);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .un-rail-btn {

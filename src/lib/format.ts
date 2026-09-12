@@ -22,6 +22,13 @@ export function truncMiddle(s: string, head = 10, tail = 10): string {
   return `${s.slice(0, head)}…${s.slice(-tail)}`;
 }
 
+/** "one_sided" -> "One sided" — the wasm binding returns raw feature-flag identifiers. */
+export function humanizeFlag(s: string): string {
+  const words = s.toLowerCase().split("_").filter(Boolean);
+  if (words.length === 0) return s;
+  return words[0][0].toUpperCase() + words[0].slice(1) + (words.length > 1 ? " " + words.slice(1).join(" ") : "");
+}
+
 export function timeAgo(ts: number): string {
   const d = Math.max(0, Date.now() - ts);
   const m = Math.floor(d / 60000);

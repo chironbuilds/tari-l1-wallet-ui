@@ -182,7 +182,7 @@ export function SendPanel() {
 
   if (stage === "review" || stage === "building") {
     return (
-      <div>
+      <div key="review" className="animate-fade-up">
         <h2 className="mb-5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <button
             onClick={() => setStage("idle")}
@@ -224,7 +224,7 @@ export function SendPanel() {
   }
 
   return (
-    <div>
+    <div key="idle" className="animate-fade-up">
       <h2 className="mb-5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
           <Send size={15} />
@@ -242,7 +242,7 @@ export function SendPanel() {
                   ? "Valid one-sided address ✓"
                   : "Single address detected — one-sided payments need a dual address"
                 : "Invalid Tari address"
-              : "Base58, emoji ID or hex"
+              : "Base58 or hex"
           }
         >
           <div className="relative">

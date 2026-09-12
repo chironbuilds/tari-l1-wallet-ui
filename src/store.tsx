@@ -27,6 +27,7 @@ import { fetchChainTip } from "./lib/explorer";
 import { deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
 import { wipeOotleState, type TokenBalance } from "./ootle";
+import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -101,7 +102,16 @@ export interface TxRecord {
 interface Persisted {
   v: 1;
   network: NetworkId;
+  /**
+   * Only ever written when no PIN has been set on this device (a pre-lock-feature save, or a user
+   * who hasn't opted in yet) — kept for backward compatibility. Once `encBackup` exists, this is
+   * always null; the seed lives on disk encrypted, never in the clear.
+   */
   backupHex: string | null;
+  /** The seed, AES-GCM-encrypted with a key derived from the user's PIN. Null until a PIN is set. */
+  encBackup?: EncryptedBlob | null;
+  /** Public address, kept out of band from the secret so the lock screen can show "this wallet" without decrypting anything. */
+  publicAddressBase58?: string;
   utxos: UtxoRecord[];
   history: TxRecord[];
   nodeUrl: string;
@@ -109,6 +119,7 @@ interface Persisted {
   scanThreads: number;
   birthdayMs: number | null;
   lastScannedHeight: number | null;
+  autoLockMinutes?: number;
   subAddresses?: SubAddress[];
   /**
    * Chain output hash -> commitment, for outputs this wallet has spent.
@@ -195,9 +206,24 @@ interface Store {
   birthdayMs: number | null;
   lastScannedHeight: number | null;
   setWalletBirthday: (birthdayMs: number) => void;
-  createWallet: (network: NetworkId) => void;
-  restoreWallet: (backupHex: string, network: NetworkId) => string | null;
+  createWallet: (network: NetworkId, pin: string) => Promise<void>;
+  restoreWallet: (backupHex: string, network: NetworkId, pin: string) => Promise<string | null>;
   forget: () => void;
+  /** True once this device has a PIN set — i.e. the seed is encrypted at rest and `lock()` works. */
+  hasPin: boolean;
+  /** True while a PIN-protected wallet exists on disk but hasn't been decrypted this session. */
+  walletLocked: boolean;
+  /** The address to show on the lock screen, read from the unencrypted persisted record. */
+  lockedAddressHint: string | null;
+  /** Hides the wallet and frees its key material from memory; a no-op until a PIN is set. */
+  lock: () => void;
+  /** Decrypts the seed with `pin` and restores the wallet. Returns false on a wrong PIN. */
+  unlock: (pin: string) => Promise<boolean>;
+  /** Opts an unencrypted (legacy or never-secured) wallet into PIN protection. */
+  setPin: (pin: string) => Promise<void>;
+  changePin: (oldPin: string, newPin: string) => Promise<boolean>;
+  autoLockMinutes: number;
+  setAutoLockMinutes: (minutes: number) => void;
   fundDemo: (valueMicro: bigint) => void;
   addScannedOutput: (handle: WasmWalletOutput, minedHeight: number, maturityHeight: number, raw?: ScanOutput) => void;
   getHandle: (id: string) => WasmWalletOutput | undefined;
@@ -238,6 +264,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [wallet, setWallet] = useState<WasmWallet | null>(null);
   const [network, setNetwork] = useState<NetworkId | null>(null);
   const [backupHex, setBackupHex] = useState<string | null>(null);
+  const [encBackup, setEncBackup] = useState<EncryptedBlob | null>(null);
+  const [walletLocked, setWalletLocked] = useState(false);
+  const [lockedAddressHint, setLockedAddressHint] = useState<string | null>(null);
+  const [autoLockMinutes, setAutoLockMinutesState] = useState(5);
+  // Stashes the just-loaded persisted record while locked, so unlock() can finish the restore the
+  // mount effect deferred instead of re-reading (and re-trusting) localStorage a second time.
+  const pendingPersistedRef = useRef<Persisted | null>(null);
   const [addressInfo, setAddressInfo] = useState<AddressInfo | null>(null);
   const [utxos, setUtxos] = useState<UtxoRecord[]>([]);
   const [history, setHistory] = useState<TxRecord[]>([]);
@@ -277,6 +310,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const handles = useRef(new Map<string, WasmWalletOutput>());
 
+  // Shared by the mount-time restore and by unlock(): re-derives every wallet handle from the
+  // chain data each UTXO record carries, since a handle itself cannot be persisted or survive a
+  // lock. Anything we cannot rebuild (no raw chain data, e.g. this session's demo outputs) is
+  // dropped or marked pending exactly as a plain reload already does today.
+  const reconstructWalletState = (w: WasmWallet, hex: string, srcUtxos: UtxoRecord[], srcHistory: TxRecord[]) => {
+    const restored: UtxoRecord[] = [];
+    const isCommitmentId = (id: string) => /^[0-9a-f]{64}$/i.test(id);
+    for (const u of srcUtxos) {
+      if (u.kind === "demo") continue;
+      if (!u.raw && !isCommitmentId(u.id)) continue;
+      if (u.raw) {
+        const { handle } = tryImportOutput(w, u.raw);
+        if (handle) {
+          handles.current.set(u.id, handle);
+          restored.push({ ...u, pending: false });
+          continue;
+        }
+      }
+      restored.push({ ...u, pending: true });
+    }
+    for (const u of restored) {
+      everOwnedRef.current.add(u.id.toLowerCase());
+      if (u.kind === "change") ownChangeRef.current.add(u.id.toLowerCase());
+    }
+    for (const t of srcHistory) {
+      for (const c of t.inputCommitments ?? []) everOwnedRef.current.add(c.toLowerCase());
+    }
+    setWallet(w);
+    setBackupHex(hex);
+    setAddressInfo(describe(w.getAddress()));
+    setUtxos(restored);
+  };
+
   useEffect(() => {
     try {
       const p = loadPersisted();
@@ -288,48 +354,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (p.birthdayMs) setBirthdayMsState(p.birthdayMs);
         if (p.lastScannedHeight) setLastScannedHeight(p.lastScannedHeight);
         if (p.subAddresses) setSubAddresses(p.subAddresses);
+        if (p.autoLockMinutes !== undefined) setAutoLockMinutesState(p.autoLockMinutes);
         if (p.spentHashes) {
           for (const [hash, commitment] of Object.entries(p.spentHashes)) {
             spentHashRef.current.set(hash.toLowerCase(), commitment.toLowerCase());
           }
         }
-        if (p.backupHex && p.network) {
+        if (p.network) setNetwork(p.network);
+        if (p.encBackup && p.network) {
+          // A PIN has been set on this device: the seed only exists on disk encrypted, so the
+          // wallet stays locked until unlock() supplies the PIN to decrypt it.
+          setEncBackup(p.encBackup);
+          setLockedAddressHint(p.publicAddressBase58 ?? null);
+          pendingPersistedRef.current = p;
+          setWalletLocked(true);
+        } else if (p.backupHex && p.network) {
+          // No PIN set yet on this device (an older save, or a user who hasn't opted in) — same
+          // zero-friction boot as before the lock feature existed.
           try {
             const w = WasmWallet.fromBackupHex(p.backupHex, p.network);
-            // Wallet handles cannot be persisted, and re-minting one with `createSelfUtxo` would
-            // fabricate an output that exists nowhere on chain — spending it is rejected by the
-            // node. Re-import each output from the chain data we kept instead; anything we cannot
-            // rebuild stays pending until the scanner sees it again.
-            const restored: UtxoRecord[] = [];
-            const isCommitmentId = (id: string) => /^[0-9a-f]{64}$/i.test(id);
-            for (const u of p.utxos ?? []) {
-              if (u.kind === "demo") continue;
-              // Records written by older builds are keyed by a random UUID and carry no chain data,
-              // so nothing can ever make them spendable or reconcile them against a block. Drop
-              // them rather than showing a balance that can never be used.
-              if (!u.raw && !isCommitmentId(u.id)) continue;
-              if (u.raw) {
-                const { handle } = tryImportOutput(w, u.raw);
-                if (handle) {
-                  handles.current.set(u.id, handle);
-                  restored.push({ ...u, pending: false });
-                  continue;
-                }
-              }
-              restored.push({ ...u, pending: true });
-            }
-            for (const u of restored) {
-              everOwnedRef.current.add(u.id.toLowerCase());
-              if (u.kind === "change") ownChangeRef.current.add(u.id.toLowerCase());
-            }
-            for (const t of p.history ?? []) {
-              for (const c of t.inputCommitments ?? []) everOwnedRef.current.add(c.toLowerCase());
-            }
-            setWallet(w);
-            setNetwork(p.network);
-            setBackupHex(p.backupHex);
-            setAddressInfo(describe(w.getAddress()));
-            setUtxos(restored);
+            reconstructWalletState(w, p.backupHex, p.utxos ?? [], p.history ?? []);
           } catch {
             localStorage.removeItem(STORAGE_KEY);
           }
@@ -341,11 +385,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || walletLocked) return;
     const p: Persisted = {
       v: 1,
       network: (network ?? "mainnet") as NetworkId,
-      backupHex,
+      backupHex: encBackup ? null : backupHex,
+      encBackup,
+      publicAddressBase58: addressInfo?.base58,
+      autoLockMinutes,
       utxos,
       history,
       subAddresses,
@@ -356,7 +403,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       lastScannedHeight,
       spentHashes: Object.fromEntries(spentHashRef.current),
     };
-    if (!backupHex) {
+    if (!backupHex && !encBackup) {
       localStorage.removeItem(STORAGE_KEY);
       return;
     }
@@ -365,19 +412,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     } catch {
       /* storage full or blocked */
     }
-  }, [ready, network, backupHex, utxos, history, subAddresses, nodeUrl, scannerUrl, scanThreads, birthdayMs, lastScannedHeight]);
+  }, [
+    ready,
+    walletLocked,
+    network,
+    backupHex,
+    encBackup,
+    addressInfo,
+    autoLockMinutes,
+    utxos,
+    history,
+    subAddresses,
+    nodeUrl,
+    scannerUrl,
+    scanThreads,
+    birthdayMs,
+    lastScannedHeight,
+  ]);
 
   const setWalletBirthday = useCallback((ms: number) => {
     setBirthdayMsState(ms);
     setLastScannedHeight(null);
   }, []);
 
-  const createWallet = useCallback((net: NetworkId) => {
+  const createWallet = useCallback(async (net: NetworkId, pin: string) => {
     const w = new WasmWallet(net);
     handles.current.clear();
+    const hex = w.getBackupHex();
+    const enc = await encryptWithPin(hex, pin);
     setWallet(w);
     setNetwork(net);
-    setBackupHex(w.getBackupHex());
+    setBackupHex(hex);
+    setEncBackup(enc);
+    setWalletLocked(false);
     setAddressInfo(describe(w.getAddress()));
     setUtxos([]);
     setHistory([]);
@@ -393,17 +460,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const restoreWallet = useCallback(
-    (hex: string, net: NetworkId): string | null => {
+    async (hex: string, net: NetworkId, pin: string): Promise<string | null> => {
       let w: WasmWallet;
+      const trimmed = hex.trim();
       try {
-        w = WasmWallet.fromBackupHex(hex.trim(), net);
+        w = WasmWallet.fromBackupHex(trimmed, net);
       } catch (e) {
         return e instanceof Error ? e.message : String(e);
       }
+      const enc = await encryptWithPin(trimmed, pin);
       handles.current.clear();
       setWallet(w);
       setNetwork(net);
-      setBackupHex(w.getBackupHex());
+      setBackupHex(trimmed);
+      setEncBackup(enc);
+      setWalletLocked(false);
       setAddressInfo(describe(w.getAddress()));
       setUtxos([]);
       setHistory([]);
@@ -416,7 +487,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const forget = useCallback(() => {
+    for (const h of handles.current.values()) h.free();
     handles.current.clear();
+    wallet?.free();
     localStorage.removeItem(STORAGE_KEY);
     wipeOotleState();
     setSubAddresses([]);
@@ -427,9 +500,74 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setWallet(null);
     setNetwork(null);
     setBackupHex(null);
+    setEncBackup(null);
+    setWalletLocked(false);
+    setLockedAddressHint(null);
+    pendingPersistedRef.current = null;
     setAddressInfo(null);
     setUtxos([]);
     setHistory([]);
+  }, [wallet]);
+
+  const lock = useCallback(() => {
+    if (!encBackup) return; // no PIN set on this device yet — nothing to lock into
+    for (const h of handles.current.values()) h.free();
+    handles.current.clear();
+    wallet?.free();
+    setWallet(null);
+    setBackupHex(null);
+    setLockedAddressHint(addressInfo?.base58 ?? null);
+    setAddressInfo(null);
+    setWalletLocked(true);
+  }, [wallet, encBackup, addressInfo]);
+
+  const unlock = useCallback(
+    async (pin: string): Promise<boolean> => {
+      if (!encBackup || !network) return false;
+      const hex = await decryptWithPin(encBackup, pin);
+      if (hex === null) return false;
+      try {
+        const w = WasmWallet.fromBackupHex(hex, network);
+        const pending = pendingPersistedRef.current;
+        if (pending) {
+          reconstructWalletState(w, hex, pending.utxos ?? [], pending.history ?? []);
+          pendingPersistedRef.current = null;
+        } else {
+          // Re-unlocking after a manual lock() mid-session: utxos/history never left state, just
+          // rebuild the wasm handles behind them.
+          reconstructWalletState(w, hex, utxos, history);
+        }
+        setWalletLocked(false);
+        setLockedAddressHint(null);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [encBackup, network, utxos, history],
+  );
+
+  const setPin = useCallback(
+    async (pin: string) => {
+      if (!backupHex) return;
+      setEncBackup(await encryptWithPin(backupHex, pin));
+    },
+    [backupHex],
+  );
+
+  const changePin = useCallback(
+    async (oldPin: string, newPin: string): Promise<boolean> => {
+      if (!encBackup) return false;
+      const hex = await decryptWithPin(encBackup, oldPin);
+      if (hex === null) return false;
+      setEncBackup(await encryptWithPin(hex, newPin));
+      return true;
+    },
+    [encBackup],
+  );
+
+  const setAutoLockMinutes = useCallback((minutes: number) => {
+    setAutoLockMinutesState(minutes);
   }, []);
 
   const fundDemo = useCallback(
@@ -1011,6 +1149,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     createWallet,
     restoreWallet,
     forget,
+    hasPin: encBackup !== null,
+    walletLocked,
+    lockedAddressHint,
+    lock,
+    unlock,
+    setPin,
+    changePin,
+    autoLockMinutes,
+    setAutoLockMinutes,
     fundDemo,
     addScannedOutput,
     removeSpent,

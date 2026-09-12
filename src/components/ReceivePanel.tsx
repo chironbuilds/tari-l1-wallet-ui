@@ -3,7 +3,7 @@ import { Check, ChevronDown, Copy, Coins } from "lucide-react";
 import { QRCode } from "react-qrcode-logo";
 import { useStore } from "../store";
 import { parseAddress } from "../lib/tari";
-import { formatMicro } from "../lib/format";
+import { formatMicro, humanizeFlag } from "../lib/format";
 import { useToast } from "./toast";
 import { copyText } from "../lib/format";
 import { Badge, Button, Card, Field, Segmented, TextInput } from "./ui";
@@ -57,6 +57,11 @@ export function ReceivePanel() {
       <p className="mt-4 max-w-full rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 text-center font-mono text-[11px] break-all text-[var(--tari-text)]">
         {display}
       </p>
+      {useEmoji && (
+        <p className="mt-2 text-center text-[11px] text-zinc-500">
+          For the Tari Universe desktop app — this wallet's own Send only accepts Base58 or hex.
+        </p>
+      )}
 
       <Button
         size="lg"
@@ -79,7 +84,9 @@ export function ReceivePanel() {
         <Badge tone={addr.isDual ? "green" : "red"}>
           {addr.isDual ? "one-sided payments supported ✓" : "single address"}
         </Badge>
-        {addr.features.length > 0 && <Badge tone="slate">{addr.features.join(" · ")}</Badge>}
+        {addr.features.length > 0 && (
+          <Badge tone="slate">{addr.features.map(humanizeFlag).join(" · ")}</Badge>
+        )}
       </div>
 
       <p className="mt-4 text-center text-xs leading-relaxed text-zinc-500">

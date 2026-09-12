@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { isLocked, useStore } from "../store";
-import { downloadText, formatMicro, timeAgo, truncMiddle } from "../lib/format";
-import { Button, Card, CopyButton, Logo, Modal } from "./ui";
+import { formatMicro, timeAgo, truncMiddle } from "../lib/format";
+import { Button, Card, CopyButton, Logo } from "./ui";
 import { TowerBackground } from "./TowerBackground";
 import { BlockExplorerMini } from "./blocks/BlockExplorerMini";
 import { SendPanel } from "./SendPanel";
@@ -60,13 +60,30 @@ export function Dashboard() {
   const store = useStore();
   const [panel, setPanel] = useState<Panel>(null);
   const [dark, setDark] = useState(false);
-  const [confirmLock, setConfirmLock] = useState(false);
   const isPhone = useIsPhone();
 
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "";
   }, [dark]);
+
+  // Any activity resets the idle timer; hitting it locks the wallet (a no-op until a PIN is set,
+  // per store.lock()'s own guard) rather than erasing anything.
+  useEffect(() => {
+    if (!store.hasPin || store.autoLockMinutes <= 0) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => store.lock(), store.autoLockMinutes * 60_000);
+    };
+    const events = ["mousemove", "keydown", "click", "touchstart", "scroll"] as const;
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [store.hasPin, store.autoLockMinutes, store.lock]);
 
   if (!store.wallet || !store.addressInfo || !store.network) return null;
 
@@ -176,8 +193,10 @@ export function Dashboard() {
             </button>
             <button
               className="un-rail-btn"
-              title="Lock & erase wallet"
-              onClick={() => setConfirmLock(true)}
+              style={!store.hasPin ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
+              title={store.hasPin ? "Lock wallet" : "Set a PIN in Settings to enable Lock"}
+              disabled={!store.hasPin}
+              onClick={() => store.lock()}
             >
               <Lock size={19} />
             </button>
@@ -406,43 +425,6 @@ export function Dashboard() {
             </Card>
           </div>
         )}
-
-      <Modal
-        open={confirmLock}
-        onClose={() => setConfirmLock(false)}
-        title="Lock & erase this wallet?"
-      >
-        <div className="space-y-4">
-          <p className="text-sm leading-relaxed text-zinc-300">
-            This wipes the enciphered backup from localStorage and returns you to the
-            splash screen. Without your backup hex the funds are unrecoverable.
-          </p>
-          {store.backupHex && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => downloadText("tari-l1-backup.hex.txt", store.backupHex!)}
-            >
-              <Download size={15} /> Download backup first
-            </Button>
-          )}
-          <div className="flex gap-2.5">
-            <Button variant="ghost" className="flex-1" onClick={() => setConfirmLock(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              className="flex-1"
-              onClick={() => {
-                store.forget();
-                setConfirmLock(false);
-              }}
-            >
-              Erase wallet
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
