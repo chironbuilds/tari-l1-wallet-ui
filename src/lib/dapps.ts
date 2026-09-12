@@ -48,7 +48,7 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     url: "https://voting.tari.mw",
-    name: "Confidential Ranked-Choice Voting",
+    name: "PriVote",
     description: "Run or vote in an anonymous ranked-choice election — ballots are stealth tokens nobody can link back to your wallet.",
     image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfsMOF76yz1Mhpslk3qX8wHKYyY7B3IWQFScO7ThkXVgXv763RcUa1ZiWT&s=10",
     tag: "Voting",
