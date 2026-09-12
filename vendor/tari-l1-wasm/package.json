@@ -1,0 +1,41 @@
+{
+  "name": "@chironbuilder/tari-l1-wasm",
+  "type": "module",
+  "collaborators": [
+    "The Tari Development Community"
+  ],
+  "description": "WebAssembly bindings for Tari L1 core primitives: addresses, amounts, fees and crypto",
+  "version": "5.6.0-pre.6",
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tari-project/tari",
+    "directory": "base_layer/tari_l1_wasm"
+  },
+  "files": [
+    "tari_l1_wasm_bg.wasm",
+    "tari_l1_wasm.js",
+    "tari_l1_wasm_bg.js",
+    "tari_l1_wasm.d.ts",
+    "tari_l1_wasm_bg.wasm.d.ts",
+    "LICENSE",
+    "README.md"
+  ],
+  "main": "tari_l1_wasm.js",
+  "types": "tari_l1_wasm.d.ts",
+  "sideEffects": [
+    "./tari_l1_wasm.js",
+    "./snippets/*"
+  ],
+  "keywords": [
+    "tari",
+    "minotari",
+    "wasm",
+    "webassembly",
+    "blockchain",
+    "crypto"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

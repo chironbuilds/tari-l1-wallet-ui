@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8" /><title>tari broadcast probe</title></head>
+<body>
+<script type="module">
+  import { WasmWallet, WasmTxBuilder, blake2b256Hex } from "@chironbuilder/tari-l1-wasm";
+  import { fetchBlockBatch, tryImportOutput } from "/src/lib/scanner.ts";
+
+  function bytesToB64(bytes) {
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(s);
+  }
+
+  window.__probeReady = true;
+  window.__probe = {
+    async run(opts) {
+      const { apiBase, amountMicro, feePerGram, corrupt } = opts;
+      const log = { steps: [] };
+      try {
+        const w = opts.backupHex
+          ? WasmWallet.fromBackupHex(opts.backupHex, "mainnet")
+          : new WasmWallet("mainnet");
+        const addr = w.getAddress().toBase58();
+        log.steps.push("wallet ready");
+
+        let handle;
+        if (opts.backupHex) {
+          const blocks = await fetchBlockBatch(
+            apiBase,
+            Number(opts.blockFrom),
+            Number(opts.blockTo ?? opts.blockFrom),
+          );
+          let seen = 0;
+          const byCommitment = new Map();
+          const ownedList = [];
+          const importErrors = [];
+          for (const b of blocks) {
+            for (const o of b.outputs || []) {
+              seen++;
+              const imported = tryImportOutput(w, o);
+              const h = imported && typeof imported === "object" && "handle" in imported ? imported.handle : imported;
+              if (h) {
+                byCommitment.set(h.commitmentHex.toLowerCase(), h);
+                ownedList.push({
+                  commitmentHex: h.commitmentHex,
+                  valueMicro: h.valueMicro.toString(),
+                  seedError: h.seedError || null,
+                  chainHash: h.chainOutputHash || null,
+                });
+              } else if (imported?.reason && importErrors.length < 10) {
+                importErrors.push({
+                  commitment: o.commitment_hex.slice(0, 12),
+                  reason: imported.reason,
+                  rpLen: (o.range_proof_hex || "").length,
+                  covLen: (o.covenant_hex || "").length,
+                });
+              }
+            }
+          }
+          log.ownedCommitments = ownedList;
+          log.importErrors = importErrors;
+          handle = opts.spendCommitment
+            ? byCommitment.get(opts.spendCommitment.toLowerCase())
+            : byCommitment.values().next().value;
+          log.lastImportDebug = {
+            marker: (() => { try { return WasmWallet.wasmBuildMarker(); } catch (e) { return "missing"; } })(),
+            rpHexLen: (blocks[0]?.outputs?.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase())?.range_proof_hex || "").length,
+            covHex: blocks[0]?.outputs?.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase())?.covenant_hex || "",
+            wasmHashOfProof: (() => { try { return WasmWallet.debugHashRangeProof(blocks[0].outputs.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase()).range_proof_hex); } catch (e) { return "err:" + e; } })(),
+            plainBlakeOfProof: (() => {
+              try {
+                const hx2 = blocks[0].outputs.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase()).range_proof_hex;
+                const bytes = new Uint8Array(hx2.match(/../g).map((x) => parseInt(x, 16)));
+                return blake2b256Hex(bytes);
+              } catch (e) { return "err:" + e; }
+            })(),
+            wasmDebugShort: WasmWallet.debugHashRangeProof("00"),
+            wasmDebugLong: WasmWallet.debugHashRangeProof("00112233".repeat(25)),
+            nativeFileHashRepro: (() => { try { return opts.proofHexFromFile ? WasmWallet.debugHashRangeProof(opts.proofHexFromFile) : "(no file)"; } catch (e) { return "err:" + e; } })(),
+            fileLen: (opts.proofHexFromFile || "").length,
+            mwRpLen: (blocks[0]?.outputs?.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase())?.range_proof_hex || "").length,
+            firstDiff: (() => {
+              const a = blocks[0]?.outputs?.find((o) => o.commitment_hex?.toLowerCase?.() === (opts.spendCommitment || "").toLowerCase())?.range_proof_hex || "";
+              const b = opts.proofHexFromFile || "";
+              for (let i = 0; i < Math.max(a.length, b.length); i++) {
+                if (a[i] !== b[i]) return `first diff at ${i}: mw='${a.slice(i, i + 8)}' file='${b.slice(i, i + 8)}' (lens ${a.length}/${b.length})`;
+              }
+              return "identical";
+            })(),
+          };
+          log.blocksFetched = blocks.length;
+          log.outputsSeen = seen;
+          if (!handle) throw new Error(`no spendable owned output found (${seen} outputs scanned)`);
+          log.mode = "funded";
+        } else {
+          handle = w.createSelfUtxo(BigInt(amountMicro));
+          log.mode = "unfunded";
+        }
+        log.owned = handle.valueMicro.toString();
+        log.steps.push("handle ready");
+
+        const tipRes = await fetch(apiBase.replace(/\/+$/, "") + "/tip");
+        const tip = await tipRes.json();
+        log.tip = tip.height;
+
+        const builder = new WasmTxBuilder(w);
+        builder.addInput(handle);
+        const ownedN = handle.valueMicro;
+        const requested = BigInt(amountMicro);
+        const sendAmt =
+          opts.backupHex && requested < ownedN
+            ? requested
+            : ownedN > 20_000n
+              ? ownedN - 15_000n
+              : ownedN;
+        if (sendAmt <= 0n) throw new Error("nothing to send");
+        builder.addRecipient(addr, sendAmt);
+        builder.withFeePerGram(BigInt(feePerGram));
+        builder.withTipHeight(BigInt(tip.height));
+        await new Promise((r) => setTimeout(r, 200));
+        const signed = builder.build();
+        log.fee = signed.feeMicro.toString();
+        log.steps.push("signed");
+        const res = await fetch(apiBase.replace(/\/+$/, "") + "/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ transaction_json: signed.toJson() }),
+        });
+        const bodyText = await res.text();
+        log.steps.push("submitted");
+        return {
+          ...log,
+          addr,
+          httpStatus: res.status,
+          response: bodyText.slice(0, 300),
+          ...(opts.dumpJson ? { txJson: signed.toJson() } : {}),
+        };
+      } catch (e) {
+        return { ...log, fatal: String(e && e.message ? e.message : e), stack: String(e && e.stack ? e.stack : "").slice(0, 400) };
+      }
+    },
+  };
+</script>
+</body>
+</html>

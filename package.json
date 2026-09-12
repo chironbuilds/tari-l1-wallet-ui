@@ -1,0 +1,57 @@
+{
+  "name": "tari-l1-wallet-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "overrides": {
+    "@tari-project/ootle-wasm": "file:vendor/ootle-wasm-patched"
+  },
+  "scripts": {
+    "postinstall": "node scripts/sync-vendored-ootle-wasm.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "server:local": "node server/index.js --host 127.0.0.1:18142 --tls 0"
+  },
+  "dependencies": {
+    "@chironbuilder/ootle-sdk": "^0.1.2",
+    "@chironbuilder/tari-l1-wasm": "file:vendor/tari-l1-wasm",
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
+    "@noble/hashes": "^2.2.0",
+    "@number-flow/react": "^0.6.2",
+    "@tari-project/ootle": "file:vendor/ootle-patched",
+    "@tari-project/ootle-indexer": "^0.3.0",
+    "@tari-project/ootle-secret-key-wallet": "^0.3.0",
+    "@tari-project/ootle-ts-bindings": "1.49.1",
+    "@tari-project/ootle-wasm": "file:vendor/ootle-wasm-patched",
+    "@tari-project/tari-tower": "^0.2.1",
+    "hls.js": "^1.7.1",
+    "lucide-react": "^0.539.0",
+    "min-signal": "^1.0.2",
+    "protobufjs": "^7.6.5",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-qrcode-logo": "^4.1.0",
+    "tari-cipherseed": "^0.2.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.180.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "puppeteer-core": "^25.8.0",
+    "tailwindcss": "^4.1.11",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.0",
+    "vite-plugin-wasm": "^3.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

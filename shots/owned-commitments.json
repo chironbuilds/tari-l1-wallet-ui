@@ -1,0 +1,14 @@
+[
+  {
+    "commitmentHex": "604ecdd5559ff2d621240d90d89b6f0acec5fce020be305127ac91d18dd01e1f",
+    "valueMicro": "998999852",
+    "seedError": null,
+    "chainHash": "cb79a5e2408ca131ddfdfaed28f436fb343ba57282d7d84c3d15e8ba299dd657"
+  },
+  {
+    "commitmentHex": "6a742797cd64f4b672f3cbab46e78a8d3ddb7d1b35ace10954cb9898c78c5b0b",
+    "valueMicro": "1000000",
+    "seedError": null,
+    "chainHash": "380b8ae804c09b1e96c8f1855ea69559885727c5b9afe340c1945ef91131fb6d"
+  }
+]

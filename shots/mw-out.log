@@ -1,0 +1,2 @@
+[tari-middleware] HTTP on :18084  →  gRPC grpc.tari.com:443 (tls)
+[tari-middleware] endpoints: /api/tip /api/blocks?from=&to= /api/submit /api/health

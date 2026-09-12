@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220" role="img" aria-labelledby="title desc">
+  <title id="title">Soon the turtle — Tari mascot</title>
+  <desc id="desc">Soon the turtle slowly walks from the left to a leaf on the right in 3 seconds.</desc>
+
+  <style>
+    /* ── crossing: one point → the other, exactly 3 s ── */
+    .soon {
+      animation: cross 3s cubic-bezier(.45,.05,.55,.95) infinite;
+    }
+    @keyframes cross {
+      from { transform: translateX(48px);  }
+      to   { transform: translateX(500px); }
+    }
+
+    /* ── gentle body bob while walking ── */
+    .bob {
+      animation: bob .25s ease-in-out infinite alternate;
+    }
+    @keyframes bob {
+      from { transform: translateY(0); }
+      to   { transform: translateY(-1.6px); }
+    }
+
+    /* ── legs: diagonal gait, pivot at the hip ── */
+    .leg {
+      transform-box: fill-box;
+      transform-origin: 50% 12%;
+      animation: step .5s ease-in-out infinite alternate;
+    }
+    @keyframes step {
+      from { transform: rotate(-22deg); }
+      to   { transform: rotate(22deg);  }
+    }
+    .leg.fl, .leg.br { animation-delay: -.25s; }  /* diagonal pair */
+
+    /* ── happy head nod ── */
+    .head {
+      transform-box: fill-box;
+      transform-origin: 10% 80%;
+      animation: nod .5s ease-in-out infinite alternate;
+    }
+    @keyframes nod {
+      from { transform: rotate(-3deg); }
+      to   { transform: rotate(3deg);  }
+    }
+
+    /* ── blink ── */
+    .eyelid {
+      transform-box: fill-box;
+      transform-origin: center top;
+      animation: blink 3s steps(1, end) infinite;
+    }
+    @keyframes blink {
+      0%, 91%, 100% { transform: scaleY(0); }
+      93%, 97%      { transform: scaleY(1); }
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="shellGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A05CFF"/>
+      <stop offset="1" stop-color="#6C2BD9"/>
+    </linearGradient>
+    <linearGradient id="rimGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8B4DFF"/>
+      <stop offset="1" stop-color="#5B21C8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ground -->
+  <line x1="24" y1="181" x2="616" y2="181" stroke="#CFC7EE" stroke-width="3"
+        stroke-linecap="round" stroke-dasharray="1 10"/>
+
+  <!-- start pebble -->
+  <circle cx="48" cy="177" r="4" fill="#CFC7EE"/>
+
+  <!-- goal: a tasty leaf -->
+  <g transform="translate(592 168)">
+    <path d="M0 12 Q -14 6 -12 -6 Q 2 -14 12 -6 Q 14 6 0 12 Z" fill="#57C79A"/>
+    <path d="M0 12 L 1 -8" stroke="#2E9B72" stroke-width="2" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- ═══════════ SOON ═══════════ -->
+  <g class="soon">
+
+    <!-- soft shadow travels with him -->
+    <ellipse cx="0" cy="182" rx="74" ry="6" fill="#000" opacity=".10"/>
+
+    <g class="bob">
+
+      <!-- far-side legs (behind shell, darker) -->
+      <rect class="leg fr" x="6"   y="148" width="15" height="32" rx="7.5" fill="#4BAE8D"/>
+      <rect class="leg br" x="-44" y="148" width="15" height="32" rx="7.5" fill="#4BAE8D"/>
+
+      <!-- tail -->
+      <path d="M -56 142 Q -76 138 -80 124" fill="none"
+            stroke="#4BAE8D" stroke-width="11" stroke-linecap="round"/>
+
+      <!-- shell -->
+      <path d="M -58 150
+               C -58 106 -32 86 0 86
+               C 32 86 58 106 58 150
+               Q 58 158 46 159
+               L -46 159
+               Q -58 158 -58 150 Z" fill="url(#shellGrad)"/>
+      <!-- shell rim -->
+      <rect x="-64" y="146" width="128" height="13" rx="6.5" fill="url(#rimGrad)"/>
+      <!-- shell pattern -->
+      <g fill="#D9BEFF" opacity=".5">
+        <circle cx="-24" cy="118" r="9"/>
+        <circle cx="8"   cy="104" r="11"/>
+        <circle cx="34"  cy="126" r="8"/>
+        <path d="M -8 132 L 2 126 L 12 132 L 12 143 L 2 149 L -8 143 Z" opacity=".65"/>
+      </g>
+      <!-- shell sheen -->
+      <path d="M -40 102 C -28 92 -8 89 6 91" stroke="#FFFFFF" stroke-width="5"
+            stroke-linecap="round" fill="none" opacity=".35"/>
+
+      <!-- near-side legs (in front of shell rim) -->
+      <rect class="leg fl" x="30"  y="150" width="16" height="31" rx="8" fill="#63C9A8"/>
+      <rect class="leg bl" x="-38" y="150" width="16" height="31" rx="8" fill="#63C9A8"/>
+
+      <!-- head + neck -->
+      <g class="head">
+        <path d="M 44 128 Q 66 122 74 112 L 84 118 Q 76 134 52 138 Z" fill="#63C9A8"/>
+        <circle cx="80" cy="112" r="17" fill="#63C9A8"/>
+        <!-- eye -->
+        <circle cx="85" cy="107" r="5.2" fill="#FFFFFF"/>
+        <circle cx="86.6" cy="107.6" r="2.7" fill="#201436"/>
+        <circle cx="87.8" cy="106.4" r=".9" fill="#FFFFFF"/>
+        <!-- eyelid (blink) -->
+        <rect class="eyelid" x="79.4" y="101.2" width="11.2" height="11.6" rx="5.6" fill="#63C9A8"/>
+        <!-- smile + blush -->
+        <path d="M 84 117 q 5 3.5 10 -.5" stroke="#2E6B54" stroke-width="2"
+              stroke-linecap="round" fill="none"/>
+        <circle cx="90" cy="115" r="3.2" fill="#FF9DB0" opacity=".45"/>
+      </g>
+    </g>
+  </g>
+</svg>

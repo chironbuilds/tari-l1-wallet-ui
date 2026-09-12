@@ -1,0 +1,8 @@
+# Never upload wallet secrets or verification scratch to a deploy.
+tari seed.txt
+taritestseed.txt
+*.seed
+shots/
+scripts/
+.tmp-verify/
+vendor/**/*.wasm.d.ts

@@ -1,0 +1,19 @@
+node_modules
+dist
+*.local
+.DS_Store
+
+.vercel
+
+# A real recovery phrase and a large reference screenshot, not source -- never commit the seed.
+tari seed.txt
+original tari UI.png
+
+# One-off debug scripts with a 24-word recovery phrase hardcoded inline (not read from the
+# gitignored "tari seed.txt" the way scripts/verify-broadcast.mjs does it) -- never commit these
+# as they stand. Fix properly (read from "tari seed.txt" instead) before ever un-ignoring one.
+scripts/verify-autoscan.mjs
+scripts/verify-prod-seed.mjs
+scripts/verify-resume.mjs
+scripts/verify-seed.mjs
+scripts/verify-tower.mjs
