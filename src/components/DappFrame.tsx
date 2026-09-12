@@ -367,7 +367,8 @@ export function DappFrame({
               const maxPages = typeof params.maxPages === "number" ? params.maxPages : undefined;
               const pageSize = typeof params.pageSize === "number" ? params.pageSize : undefined;
               const limit = typeof params.limit === "number" ? params.limit : undefined;
-              const found = await account.scanForResourceUtxos(resourceAddress, { maxPages, pageSize, limit });
+              const transactionIds = Array.isArray(params.transactionIds) ? (params.transactionIds as string[]) : undefined;
+              const found = await account.scanForResourceUtxos(resourceAddress, { maxPages, pageSize, limit, transactionIds });
               // Same reasoning as tari_scanForPrivatePayments above: a scan that discovers real
               // outputs must be reflected in the wallet's own view, not only handed to the dApp.
               storeRef.current.refreshL2();
