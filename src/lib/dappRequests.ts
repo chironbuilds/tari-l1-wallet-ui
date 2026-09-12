@@ -181,6 +181,17 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         operation.relatedComponents ?? [],
         maxFee,
       );
+    case "redeemStealthOutputWithPrivateFee":
+      return account.redeemStealthOutputWithPrivateFee(
+        operation.resourceAddress,
+        operation.commitmentHex,
+        BigInt(operation.revealedAmount),
+        operation.followUpInstructions as never[],
+        operation.feeResourceAddress,
+        operation.feeCommitmentHex,
+        BigInt(operation.maxFee),
+        operation.relatedComponents ?? [],
+      );
     case "shield":
       return account.shield(
         operation.resourceAddress,
@@ -303,6 +314,19 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         followUpInstructions: p.followUpInstructions,
         relatedComponents: p.relatedComponents as string[] | undefined,
         maxFee: p.maxFee as string | undefined,
+      };
+    case "redeemStealthOutputWithPrivateFee":
+      if (!Array.isArray(p.followUpInstructions)) throw new Error("followUpInstructions must be an array.");
+      return {
+        kind: "redeemStealthOutputWithPrivateFee",
+        resourceAddress: stringField("resourceAddress"),
+        commitmentHex: stringField("commitmentHex"),
+        revealedAmount: amountField("revealedAmount"),
+        followUpInstructions: p.followUpInstructions,
+        feeResourceAddress: stringField("feeResourceAddress"),
+        feeCommitmentHex: stringField("feeCommitmentHex"),
+        maxFee: amountField("maxFee"),
+        relatedComponents: p.relatedComponents as string[] | undefined,
       };
     case "shield": {
       const amount = amountField("amount");

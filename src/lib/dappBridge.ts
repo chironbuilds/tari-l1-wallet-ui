@@ -122,6 +122,10 @@ export function capabilitiesFor(origin: string | null) {
      * party) into a dApp's own contract call. Always true here, same reasoning as `stealthWithdraw`
      * above. */
     stealthRedeem: true,
+    /** The `redeemStealthOutputWithPrivateFee` operation kind — like `stealthRedeem` but the fee
+     * is also paid from a stealth UTXO, so the transaction never reveals this wallet's address.
+     * Always true here, same reasoning as `stealthRedeem` above. */
+    stealthRedeemPrivateFee: true,
     htlcFund: true,
     /** `htlcClaim`/`htlcRefund` — the other half of `htlcFund`, reachable as transaction-request
      * operation kinds. */
@@ -228,6 +232,23 @@ export type TransactionRequestOperation =
       followUpInstructions: unknown[];
       relatedComponents?: string[];
       maxFee?: string;
+    }
+  /** Identical to `redeemStealthOutputAndExecute`, except the fee is ALSO paid from a stealth
+   * UTXO (a second, separate commitment of `feeResourceAddress` this account owns) instead of
+   * this account's revealed balance — required whenever `followUpInstructions` carries
+   * information that would deanonymize the account if the fee input did (e.g. a voting ballot's
+   * ranking). Result adds `feeChangeCommitment` — the fee UTXO's unspent remainder, now a new
+   * stealth output the caller must track itself to fund a next call the same way. */
+  | {
+      kind: "redeemStealthOutputWithPrivateFee";
+      resourceAddress: string;
+      commitmentHex: string;
+      revealedAmount: string;
+      followUpInstructions: unknown[];
+      feeResourceAddress: string;
+      feeCommitmentHex: string;
+      maxFee: string;
+      relatedComponents?: string[];
     }
   | {
       kind: "htlcFund";
@@ -546,6 +567,12 @@ export function describeOperation(operation: TransactionRequestOperation): strin
     case "redeemStealthOutputAndExecute":
       return [
         `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
+        `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
+      ];
+    case "redeemStealthOutputWithPrivateFee":
+      return [
+        `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
+        `Pay the fee from a separate stealth UTXO (${shortId(operation.feeCommitmentHex)}) — this wallet's address is never revealed`,
         `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
       ];
     case "shield":
