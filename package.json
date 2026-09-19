@@ -16,7 +16,7 @@
     "server:local": "node server/index.js --host 127.0.0.1:18142 --tls 0"
   },
   "dependencies": {
-    "@chironbuilder/ootle-sdk": "^0.1.8",
+    "@chironbuilder/ootle-sdk": "^0.1.11",
     "@chironbuilder/tari-l1-wasm": "file:vendor/tari-l1-wasm",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",

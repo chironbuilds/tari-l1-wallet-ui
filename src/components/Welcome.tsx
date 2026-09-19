@@ -155,7 +155,7 @@ export function Welcome() {
                 rows={3}
                 spellCheck={false}
                 placeholder="word one word two …"
-                className="w-full rounded-xl border border-black/10 bg-black/[0.03] p-3.5 text-sm text-[var(--tari-text)] placeholder-zinc-400 focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none dark:border-white/10 dark:bg-black/40 dark:text-zinc-100 dark:placeholder-zinc-600"
+                className="w-full rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 text-sm text-[var(--tari-text)] placeholder-[var(--tari-text-dim)] focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none"
               />
             </Field>
           </div>
@@ -170,7 +170,7 @@ export function Welcome() {
                 rows={4}
                 spellCheck={false}
                 placeholder="Paste the hex blob exported from this wallet…"
-                className="w-full rounded-xl border border-white/10 bg-black/40 p-3.5 font-mono text-[12px] break-all text-zinc-100 placeholder-zinc-600 focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none"
+                className="w-full rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 font-mono text-[12px] break-all text-[var(--tari-text)] placeholder-[var(--tari-text-dim)] focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none"
               />
             </Field>
           </div>

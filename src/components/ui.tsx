@@ -185,6 +185,46 @@ export function Segmented<T extends string>({
   );
 }
 
+/** A labeled two-state sliding toggle, for a strictly binary choice (unlike `Segmented`, which
+ * suits 3+ options). A hidden checkbox drives it so it's keyboard/screen-reader accessible for
+ * free — the visible track/thumb are `peer-checked` siblings, no extra state needed. */
+export function Switch({
+  checked,
+  onChange,
+  offLabel,
+  onLabel,
+  className,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  /** Shown to the left/right of the track respectively — e.g. "Transparent" / "Private". */
+  offLabel: ReactNode;
+  onLabel: ReactNode;
+  className?: string;
+}) {
+  return (
+    <label className={cn("inline-flex cursor-pointer items-center gap-2.5 select-none", className)}>
+      <span className={cn("text-xs font-semibold transition-colors", !checked ? "text-[var(--tari-text)]" : "text-[var(--tari-text-dim)]")}>
+        {offLabel}
+      </span>
+      <span className="relative inline-block h-6 w-11 shrink-0">
+        <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <span
+          className={cn(
+            "absolute inset-0 rounded-full border border-[var(--tari-border)] bg-[var(--tari-bg-input)] transition-colors",
+            "peer-checked:border-transparent peer-checked:bg-gradient-to-r peer-checked:from-violet-600 peer-checked:to-fuchsia-600",
+            "peer-focus-visible:ring-2 peer-focus-visible:ring-violet-500/50",
+          )}
+        />
+        <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+      </span>
+      <span className={cn("text-xs font-semibold transition-colors", checked ? "text-[var(--tari-text)]" : "text-[var(--tari-text-dim)]")}>
+        {onLabel}
+      </span>
+    </label>
+  );
+}
+
 export function Modal({
   open,
   onClose,

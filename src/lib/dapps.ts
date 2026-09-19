@@ -47,11 +47,14 @@ export const CATALOG: CatalogEntry[] = [
     tag: "Reference",
   },
   {
-    url: "https://voting.tari.mw",
-    name: "PriVote",
-    description: "Run or vote in an anonymous ranked-choice election — ballots are stealth tokens nobody can link back to your wallet.",
-    image: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSfsMOF76yz1Mhpslk3qX8wHKYyY7B3IWQFScO7ThkXVgXv763RcUa1ZiWT&s=10",
-    tag: "Voting",
+    url: "https://xtm-market.johnnytsunami14.chatgpt.site",
+    name: "XTM Market",
+    description: "Browse goods priced and settled in XTM on Tari Ootle, with live USD reference values.",
+    // The site's own favicon, inlined: a data: URI needs no cross-origin fetch, so it can't be
+    // blocked by the dApp's CSP or go stale like a hotlinked image would.
+    image:
+      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230a0d11'/%3E%3Cpath d='M13 19h38l-4 28H17z' fill='none' stroke='%2368f0c5' stroke-width='5'/%3E%3Cpath d='M23 25c0-8 18-8 18 0' fill='none' stroke='%23ffb85c' stroke-width='5'/%3E%3C/svg%3E",
+    tag: "Marketplace",
   },
 ];
 
@@ -132,18 +135,27 @@ function readArtCache(): ArtCache {
   }
 }
 
-function writeArtCache(url: string, src: string | null): void {
+// Keyed by url + the image hint, not url alone: a dApp probed before it had (or before the
+// catalogue shipped) an explicit `image` caches its negative result under the same bare url a
+// later, image-bearing lookup would use, so a stale "nothing found" silently wins for up to
+// ART_TTL_MS even after a real image becomes available. Folding the hint into the key means a
+// changed or newly-added `image` is a fresh cache entry, not a collision with the old one.
+function artCacheKey(url: string, image: string | undefined): string {
+  return image ? `${url}::${image}` : url;
+}
+
+function writeArtCache(url: string, image: string | undefined, src: string | null): void {
   try {
     const cache = readArtCache();
-    cache[url] = { src, at: Date.now() };
+    cache[artCacheKey(url, image)] = { src, at: Date.now() };
     localStorage.setItem(ART_CACHE_KEY, JSON.stringify(cache));
   } catch {
     /* storage unavailable — probing again next time is the only cost */
   }
 }
 
-export function cachedArtwork(url: string): string | null | undefined {
-  const hit = readArtCache()[url];
+export function cachedArtwork(url: string, image?: string): string | null | undefined {
+  const hit = readArtCache()[artCacheKey(url, image)];
   if (!hit || Date.now() - hit.at > ART_TTL_MS) return undefined;
   return hit.src;
 }
@@ -171,7 +183,7 @@ export function resolveArtwork(
     const finish = (src: string | null) => {
       if (settled) return;
       settled = true;
-      if (!signal?.cancelled) writeArtCache(dapp.url, src);
+      if (!signal?.cancelled) writeArtCache(dapp.url, dapp.image, src);
       resolve(src);
     };
 
@@ -186,9 +198,14 @@ export function resolveArtwork(
 
     candidates.forEach((src, i) => {
       const img = new Image();
+      // SVG with a `viewBox` but no `width`/`height` (a favicon.svg very often is exactly this —
+      // see DappArt's own comment on rendering one) has no intrinsic size, so `naturalWidth` can
+      // legitimately come back 0 in a real, successfully-decoded image, not just in the tracking-
+      // pixel/error-page case the size check exists to catch. That check only means something for a
+      // raster image, which always has a real intrinsic size once decoded.
+      const isSvg = src.startsWith("data:image/svg") || /\.svg(\?|$)/i.test(src);
       img.onload = () => {
-        // A 1x1 tracking pixel or an error page rendered as an image is not artwork.
-        status[i] = img.naturalWidth >= 16 && img.naturalHeight >= 16 ? "ok" : "fail";
+        status[i] = isSvg || (img.naturalWidth >= 16 && img.naturalHeight >= 16) ? "ok" : "fail";
         check();
       };
       img.onerror = () => {

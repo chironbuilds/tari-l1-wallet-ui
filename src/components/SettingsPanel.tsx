@@ -20,7 +20,7 @@ import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { useToast } from "./toast";
-import { Badge, Button, Card, CopyButton, Field, Segmented, TextInput } from "./ui";
+import { Badge, Button, Card, CopyButton, Field, Segmented, Switch, TextInput } from "./ui";
 import { connectedSites, revokeConnection, revokeViewAccess } from "../lib/dappBridge";
 import { forgetOrigin } from "../lib/dappRequests";
 import { detectedCores, maxWorkers, threadOptions } from "../lib/threads";
@@ -32,6 +32,7 @@ const AUTO_LOCK_OPTIONS = [
   { value: 30, label: "30 min" },
   { value: 0, label: "Never" },
 ];
+
 
 export function SettingsPanel() {
   const store = useStore();
@@ -206,6 +207,23 @@ export function SettingsPanel() {
               options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
             />
           </Field>
+        </div>
+
+        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
+          <Field label="Default fee privacy (Ootle / L2)">
+            <Switch
+              checked={store.feePrivacyDefault === "private"}
+              onChange={(v) => store.setFeePrivacyDefault(v ? "private" : "transparent")}
+              offLabel="Transparent"
+              onLabel="Private"
+            />
+          </Field>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+            Private pays the fee from a shielded UTXO instead of your revealed balance, so the
+            transaction doesn't reveal this account on-chain. Requires some XTR already shielded —
+            see the Private balance panel. A connected dApp can override this per request, or
+            require one or the other outright.
+          </p>
         </div>
 
         <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--tari-border)] pt-4">

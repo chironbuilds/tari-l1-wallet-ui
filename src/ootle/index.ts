@@ -14,7 +14,7 @@ configureOotleStorage(localStorageAdapter());
 void migrateOotleStorageOnce();
 
 export { OotleAccount } from "@chironbuilder/ootle-sdk";
-export type { PrivateBalance, TokenBalance } from "@chironbuilder/ootle-sdk";
+export type { FeeType, PrivateBalance, TokenBalance } from "@chironbuilder/ootle-sdk";
 export { toOotleNetwork } from "@chironbuilder/ootle-sdk";
 export type { NetworkName } from "@chironbuilder/ootle-sdk";
 export { wipeOotleState } from "@chironbuilder/ootle-sdk";

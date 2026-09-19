@@ -35,7 +35,8 @@ import {
   summarize,
 } from "../lib/dappRequests";
 import { hostOf } from "../lib/dapps";
-import { Badge, Button } from "./ui";
+import { OOTLE_NETWORK } from "../ootle";
+import { Badge, Button, Switch } from "./ui";
 
 interface ApprovalState {
   id: string;
@@ -45,6 +46,13 @@ interface ApprovalState {
    * the "this spends real funds" warning would be false and, worse, would train users to ignore it
    * where it is true. "spend" is everything that moves value. */
   tone: "connect" | "view" | "spend";
+  /** Present only for a transaction request (every `REQUEST_METHODS` operation). `enforced: true`
+   * means the dApp set `enforceFeeType` — the dialog shows `initial` as a locked fact, not a
+   * choice. Otherwise the dialog renders an editable toggle seeded at `initial` (the dApp's
+   * `feeType` hint if it gave one, else this wallet's own default); the user's live pick is read
+   * from `feeTypeChoiceRef` at decide-time, never from this object (which never changes after the
+   * dialog opens). */
+  feeChoice?: { enforced: boolean; initial: "private" | "transparent" };
   decide: (approved: boolean) => void;
 }
 
@@ -71,6 +79,9 @@ export function DappFrame({
   const [connected, setConnected] = useState(() => (origin ? isConnected(origin) : false));
   const [viewAccess, setViewAccess] = useState(() => (origin ? hasViewAccess(origin) : false));
   const [approval, setApproval] = useState<ApprovalState | null>(null);
+  /** Mirrors `feeTypeChoiceRef` for rendering — a ref alone wouldn't re-render the toggle. Reset
+   * whenever a new approval opens (including one with no `feeChoice` at all, where it's unused). */
+  const [feeTypeDisplay, setFeeTypeDisplay] = useState<"private" | "transparent">("transparent");
   const [blocked, setBlocked] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -119,22 +130,31 @@ export function DappFrame({
   // a different request. Each prompt waits for the previous one to be answered.
   const promptQueue = useRef<Promise<unknown>>(Promise.resolve());
 
+  /** The live value of the current approval's fee-type toggle (when `feeChoice` was given), read
+   * by the transaction-request flow right after `askUser` resolves — kept out of `askUser`'s own
+   * `Promise<boolean>` so every other caller (connect/view-access approvals) is untouched by this.
+   * Set fresh each time a `feeChoice` approval opens; the toggle's `onChange` keeps it current. */
+  const feeTypeChoiceRef = useRef<"private" | "transparent" | null>(null);
+
   /** Puts a request in front of the user and waits for a verdict. */
   const askUser = useCallback(
     (
       id: string,
       method: BridgeMethod,
       params: Record<string, unknown>,
-      options: { tone?: ApprovalState["tone"]; summary?: string[] } = {},
+      options: { tone?: ApprovalState["tone"]; summary?: string[]; feeChoice?: ApprovalState["feeChoice"] } = {},
     ) => {
       const answered = promptQueue.current.then(
         () =>
           new Promise<boolean>((resolve) => {
+            feeTypeChoiceRef.current = options.feeChoice?.initial ?? null;
+            setFeeTypeDisplay(options.feeChoice?.initial ?? "transparent");
             setApproval({
               id,
               method,
               summary: options.summary ?? describeRequest(method, params),
               tone: options.tone ?? "spend",
+              feeChoice: options.feeChoice,
               decide: (approved) => {
                 setApproval(null);
                 resolve(approved);
@@ -157,7 +177,16 @@ export function DappFrame({
 
       // Matches the extension's own gating: the network is answerable to any page, everything
       // else needs a connection the user granted.
-      if (req.method === "tari_getNetwork") return { result: s.network };
+      //
+      // This must be OOTLE_NETWORK ("esmeralda"), not `s.network`: `s.network` is the *L1* wallet's
+      // own network (always "mainnet" today -- see Welcome.tsx, which hardcodes it with no UI to
+      // change it, and OOTLE_NETWORK's own doc comment on why the two layers are deliberately not
+      // the same network). Every dApp bridge call here (`tari_getDefaultAccount`, `component_...`
+      // addresses, everything else in this handler) is talking to Ootle, not to L1, and a dApp that
+      // gates on `tari_getNetwork` returning "esmeralda" -- exactly as real dApps do, e.g. checking
+      // `String(network).toLowerCase().includes('esmeralda')` -- would otherwise be told "mainnet"
+      // and refuse to connect, even though the wallet is on the only network Ootle actually runs on.
+      if (req.method === "tari_getNetwork") return { result: OOTLE_NETWORK };
 
       if (req.method === "tari_disconnect") {
         if (origin) {
@@ -403,10 +432,24 @@ export function DappFrame({
           }
           const summary = describeOperation(operation);
           const requestId = createRequest(origin, operation, summary.join(" · "));
+          // Absent for `redeemStealthOutputWithPrivateFee`, which has no `feeType` field (already
+          // always private). Otherwise seeded from the dApp's own `feeType` hint if it gave one,
+          // else this wallet's own default -- `enforced` locks the dialog's toggle instead of
+          // letting the user change it (parseOperation already required `feeType` be set whenever
+          // `enforceFeeType` is).
+          const feeChoice =
+            operation.kind === "redeemStealthOutputWithPrivateFee"
+              ? undefined
+              : {
+                  enforced: operation.enforceFeeType === true,
+                  initial: operation.feeType ?? storeRef.current.feePrivacyDefault,
+                };
           // Deliberately not awaited. `create` answers with the id straight away so a dApp that
           // reloads while the user is deciding can still find the request; awaiting here would put
           // the whole flow back inside one promise that a reload destroys.
-          void askUser(requestId, req.method, params, { summary }).then((approved) => recordDecision(requestId, approved));
+          void askUser(requestId, req.method, params, { summary, feeChoice }).then((approved) =>
+            recordDecision(requestId, approved, feeChoice ? feeTypeChoiceRef.current ?? feeChoice.initial : undefined),
+          );
           return { result: { requestId } };
         }
 
@@ -613,7 +656,18 @@ export function DappFrame({
           // meaningful. Isolation here comes from the dApp being a different origin, not from the
           // sandbox attribute.
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"
-          referrerPolicy="no-referrer"
+          // `strict-origin`, not `no-referrer`: this wallet's own trust check never reads
+          // `document.referrer` (see the message handler below — it checks `event.source` and
+          // `event.origin` on incoming requests), so `no-referrer` bought nothing here. It did cost
+          // something: a `tari-connector.js` that hardens itself by checking `document.referrer`
+          // against this site's known origin (a reasonable thing for a dApp to do, and one real
+          // vendored copy in the wild already does) sees an empty referrer under `no-referrer` and
+          // concludes it isn't embedded at all, so every request rejects with "wallet unavailable"
+          // even though it plainly is. `strict-origin` sends only the bare origin (no path, no
+          // query, nothing session-specific) on same-scheme navigations, which the dApp could
+          // already infer from the connector script's own documented src URL, so this leaks nothing
+          // new.
+          referrerPolicy="strict-origin"
           className="h-full w-full border-0 bg-white"
         />
 
@@ -669,6 +723,28 @@ export function DappFrame({
                   </li>
                 ))}
               </ul>
+              {approval.feeChoice && (
+                <div className="mt-4 rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-2.5">
+                  <p className="mb-1.5 text-[11px] font-semibold text-[var(--tari-text-dim)]">Fee payment</p>
+                  {approval.feeChoice.enforced ? (
+                    <p className="text-xs text-[var(--tari-text)]">
+                      This site requires a <strong>{approval.feeChoice.initial}</strong> fee for this
+                      request — it can't be changed here. Reject if you don't want that.
+                    </p>
+                  ) : (
+                    <Switch
+                      checked={feeTypeDisplay === "private"}
+                      onChange={(v) => {
+                        const next = v ? "private" : "transparent";
+                        feeTypeChoiceRef.current = next;
+                        setFeeTypeDisplay(next);
+                      }}
+                      offLabel="Transparent"
+                      onLabel="Private"
+                    />
+                  )}
+                </div>
+              )}
               {/* The spend warning is shown only where it is true. A permission grant moves no
                   funds, and putting "this spends real funds" on one would be both wrong and
                   corrosive — a warning that appears on everything gets read as decoration by the

@@ -157,6 +157,10 @@ export function capabilitiesFor(origin: string | null) {
     /** The `depositConfidential` transaction-request kind — moves revealed balance into a
      * Confidential-type vault, a different privacy mechanism from the Stealth surface above. */
     confidentialDeposit: true,
+    /** `feeType`/`enforceFeeType` on every transaction-request kind except
+     * `redeemStealthOutputWithPrivateFee` (always private already) — see that field's own doc
+     * comment on `TransactionRequestOperation`. */
+    supportsPrivateFees: true,
     dryRunIsLocal: true,
   };
 }
@@ -210,8 +214,17 @@ export type BridgeCapabilities = ReturnType<typeof capabilitiesFor>;
  * one-time authorizations only the wallet's own signer can produce. A dApp can ask the wallet to
  * build one; it can never hand one over.
  */
+/**
+ * `feeType`/`enforceFeeType`, present on every kind below except `redeemStealthOutputWithPrivateFee`
+ * (which is inherently always a private fee already): lets a dApp request or require how the
+ * transaction's fee is paid. `feeType` alone is only a hint -- the wallet still applies its own
+ * default/switch and the user can change it in the approval dialog. `enforceFeeType: true` makes
+ * `feeType` (then required) binding: the approval dialog locks the choice and tells the user this
+ * site requires it, with no way to change it short of rejecting. See `capabilitiesFor`'s
+ * `supportsPrivateFees` for how a dApp checks this exists before relying on it.
+ */
 export type TransactionRequestOperation =
-  | { kind: "instructions"; instructions: unknown[]; maxFee?: string; inputs?: unknown[] }
+  | { kind: "instructions"; instructions: unknown[]; maxFee?: string; inputs?: unknown[]; feeType?: "private" | "transparent"; enforceFeeType?: boolean }
   | {
       kind: "withdrawStealthAndExecute";
       resourceAddress: string;
@@ -220,6 +233,8 @@ export type TransactionRequestOperation =
       followUpInstructions: unknown[];
       relatedComponents?: string[];
       maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
     }
   /** Spends one specific, externally-known stealth commitment (e.g. a ballot/ticket token some
    * other party minted directly to this wallet's address, as opposed to `withdrawStealthAndExecute`'s
@@ -234,13 +249,17 @@ export type TransactionRequestOperation =
       followUpInstructions: unknown[];
       relatedComponents?: string[];
       maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
     }
   /** Identical to `redeemStealthOutputAndExecute`, except the fee is ALSO paid from a stealth
    * UTXO (a second, separate commitment of `feeResourceAddress` this account owns) instead of
    * this account's revealed balance — required whenever `followUpInstructions` carries
    * information that would deanonymize the account if the fee input did (e.g. a voting ballot's
    * ranking). Result adds `feeChangeCommitment` — the fee UTXO's unspent remainder, now a new
-   * stealth output the caller must track itself to fund a next call the same way. */
+   * stealth output the caller must track itself to fund a next call the same way. Already always
+   * a private fee -- no `feeType`/`enforceFeeType` here, use `redeemStealthOutputAndExecute` with
+   * `enforceFeeType: true, feeType: "private"` instead if auto-selecting the fee UTXO is fine. */
   | {
       kind: "redeemStealthOutputWithPrivateFee";
       resourceAddress: string;
@@ -260,20 +279,46 @@ export type TransactionRequestOperation =
       hashLockHex: string;
       refundEpoch: string;
       maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
     }
   /** Revealed -> private, staying in this same account. `minimumValuePromise` turns the resulting
    * output into a proof of funds -- see that field's shared explainer below. Result:
    * `{ transactionId, commitment, substateId, minimumValuePromise }`. */
-  | { kind: "shield"; resourceAddress: string; amount: string; maxFee?: string; memo?: string; minimumValuePromise?: string }
+  | {
+      kind: "shield";
+      resourceAddress: string;
+      amount: string;
+      maxFee?: string;
+      memo?: string;
+      minimumValuePromise?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
+    }
   /** Revealed -> a Confidential-type vault, same account -- the "Confidential" `ResourceType`'s
    * equivalent of `shield`, a different privacy mechanism (vault-based, ElGamal-encrypted to a
    * resource view key) than the Stealth kinds around it. Only meaningful against a resource
    * actually created as `ResourceType::Confidential`; fails on-chain against any other resource
    * type, not client-side. No `minimumValuePromise` equivalent exists for Confidential vaults. */
-  | { kind: "depositConfidential"; resourceAddress: string; amount: string; maxFee?: string }
+  | {
+      kind: "depositConfidential";
+      resourceAddress: string;
+      amount: string;
+      maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
+    }
   /** Private -> revealed, back into this account's on-chain vault. Which stealth UTXOs get spent to
    * cover `revealedAmount` is the wallet's own coin-selection decision, not the dApp's. */
-  | { kind: "unshield"; resourceAddress: string; revealedAmount: string; maxFee?: string; memo?: string }
+  | {
+      kind: "unshield";
+      resourceAddress: string;
+      revealedAmount: string;
+      maxFee?: string;
+      memo?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
+    }
   /** Private -> private. The result's `recipientCommitment` is the recipient's only lead to the
    * payment — no scan-by-view-key API exists for a specific counterparty — so whoever brokered the
    * transfer must deliver it out of band. */
@@ -288,11 +333,22 @@ export type TransactionRequestOperation =
        * the recipient a publicly verifiable floor on what they were paid without revealing the
        * exact amount. Result adds `recipientSubstateId` and `minimumValuePromise`. */
       minimumValuePromise?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
     }
   /** Spends an HTLC output addressed to this account by revealing the claim leaf's preimage.
    * `conditions` must be the exact two-leaf tree the funder produced: only its root is on-chain, so
    * it cannot be recovered from the chain alone. */
-  | { kind: "htlcClaim"; resourceAddress: string; commitment: string; conditions: object[]; preimageHex: string; maxFee?: string }
+  | {
+      kind: "htlcClaim";
+      resourceAddress: string;
+      commitment: string;
+      conditions: object[];
+      preimageHex: string;
+      maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
+    }
   /** Refunds an HTLC this account funded, once `refundEpoch` passed. `amount` and `outputMask` must
    * be exactly what the matching `htlcFund` returned — the output is addressed to the claimant, so
    * this account cannot decrypt it and has no other way back to those values. */
@@ -304,6 +360,8 @@ export type TransactionRequestOperation =
       amount: string;
       outputMask: string;
       maxFee?: string;
+      feeType?: "private" | "transparent";
+      enforceFeeType?: boolean;
     };
 
 export interface BridgeRequest {

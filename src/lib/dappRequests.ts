@@ -17,7 +17,7 @@
  * session anyway. The difference is documented rather than papered over: `tari_getTransactionRequest`
  * on an unknown id after a wallet reload means "gone", not "still pending".
  */
-import type { OotleAccount } from "../ootle";
+import type { FeeType, OotleAccount } from "../ootle";
 import type { TransactionRequestOperation } from "./dappBridge";
 
 /** How long an approved-but-unsubmitted request stays submittable. Matches the extension's 15
@@ -101,14 +101,25 @@ export function summarize(record: RequestRecord): TransactionRequestSummary {
   };
 }
 
-/** Records the user's verdict. Guarded to a still-pending record: a submission may already have
+/**
+ * Records the user's verdict. Guarded to a still-pending record: a submission may already have
  * claimed it (see `claimForSubmit`), and writing "approved" over that would reopen the
- * double-submit window this whole gate exists to close. */
-export function recordDecision(requestId: string, approved: boolean): void {
+ * double-submit window this whole gate exists to close.
+ *
+ * `chosenFeeType`, when given, overwrites the operation's own `feeType` with whatever the user
+ * settled on in the approval dialog — the dApp's original `feeType` was only ever a hint (or,
+ * under `enforceFeeType`, the locked value the dialog didn't let the user change either way) — so
+ * by the time `executeOperation` reads `record.operation.feeType` later, it's always the final
+ * decision, not the dApp's request.
+ */
+export function recordDecision(requestId: string, approved: boolean, chosenFeeType?: "private" | "transparent"): void {
   const record = records.get(requestId);
   if (!record || record.status !== "pending") return;
   record.status = approved ? "approved" : "rejected";
   if (!approved) record.error = "Rejected by the user.";
+  else if (chosenFeeType && record.operation.kind !== "redeemStealthOutputWithPrivateFee") {
+    record.operation = { ...record.operation, feeType: chosenFeeType };
+  }
 }
 
 export type ClaimOutcome = { claimed: true; record: RequestRecord } | { claimed: false; reason: string };
@@ -150,6 +161,25 @@ export function forgetOrigin(origin: string): void {
   }
 }
 
+/** The Ootle native token -- engine-special-cased on-chain, so its resource address is a fixed,
+ * well-known constant rather than something to look up per account. */
+const XTR_RESOURCE_ADDRESS = "resource_0101010101010101010101010101010101010101010101010101010101010101";
+
+/**
+ * Resolves an operation's already-decided `feeType` ("private" | "transparent" | absent, set at
+ * approval time — see `recordDecision`'s doc comment) into the SDK's `FeeType` shape.
+ *
+ * Deliberately does NOT look this up via `getBalances()` (revealed/vault balances): that can come
+ * back with no XTR entry at all for an account holding XTR purely as shielded UTXOs (no revealed
+ * vault ever touched), which is exactly the kind of account most likely to want a private fee.
+ * Whether there's actually a shielded UTXO big enough to pay from is ootle-sdk-ts's own concern
+ * (`selectPrivateFeeUtxo`), surfaced as its own clear error if not.
+ */
+async function resolveFeeType(feeType: "private" | "transparent" | undefined): Promise<FeeType> {
+  if (feeType !== "private") return { kind: "transparent" };
+  return { kind: "private", feeResourceAddress: XTR_RESOURCE_ADDRESS };
+}
+
 /**
  * Runs an operation against the account.
  *
@@ -160,9 +190,15 @@ export function forgetOrigin(origin: string): void {
  */
 export async function executeOperation(account: OotleAccount, operation: TransactionRequestOperation): Promise<unknown> {
   const maxFee = operation.maxFee !== undefined ? BigInt(operation.maxFee) : undefined;
+  const feeType =
+    operation.kind === "redeemStealthOutputWithPrivateFee" ? undefined : await resolveFeeType(operation.feeType);
   switch (operation.kind) {
     case "instructions":
-      return account.execute(operation.instructions as never[], { maxFee, inputs: operation.inputs as never[] | undefined });
+      return account.execute(operation.instructions as never[], {
+        maxFee,
+        inputs: operation.inputs as never[] | undefined,
+        feeType,
+      });
     case "withdrawStealthAndExecute":
       return account.withdrawStealthAndExecute(
         operation.resourceAddress,
@@ -171,6 +207,7 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         operation.followUpInstructions as never[],
         operation.relatedComponents ?? [],
         maxFee,
+        feeType,
       );
     case "redeemStealthOutputAndExecute":
       return account.redeemStealthOutputAndExecute(
@@ -180,6 +217,7 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         operation.followUpInstructions as never[],
         operation.relatedComponents ?? [],
         maxFee,
+        feeType,
       );
     case "redeemStealthOutputWithPrivateFee":
       return account.redeemStealthOutputWithPrivateFee(
@@ -199,11 +237,12 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         maxFee,
         operation.memo,
         operation.minimumValuePromise !== undefined ? BigInt(operation.minimumValuePromise) : 0n,
+        feeType,
       );
     case "unshield":
-      return account.unshield(operation.resourceAddress, BigInt(operation.revealedAmount), maxFee, operation.memo);
+      return account.unshield(operation.resourceAddress, BigInt(operation.revealedAmount), maxFee, operation.memo, feeType);
     case "depositConfidential":
-      return account.depositConfidential(operation.resourceAddress, BigInt(operation.amount), maxFee);
+      return account.depositConfidential(operation.resourceAddress, BigInt(operation.amount), maxFee, feeType);
     case "sendPrivately":
       return account.sendPrivately(
         operation.resourceAddress,
@@ -212,6 +251,7 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         maxFee,
         operation.memo,
         operation.minimumValuePromise !== undefined ? BigInt(operation.minimumValuePromise) : 0n,
+        feeType,
       );
     case "htlcFund":
       return account.htlcFund(
@@ -221,9 +261,17 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         operation.hashLockHex,
         BigInt(operation.refundEpoch),
         maxFee,
+        feeType,
       );
     case "htlcClaim":
-      return account.htlcClaim(operation.resourceAddress, operation.commitment, operation.conditions, operation.preimageHex, maxFee);
+      return account.htlcClaim(
+        operation.resourceAddress,
+        operation.commitment,
+        operation.conditions,
+        operation.preimageHex,
+        maxFee,
+        feeType,
+      );
     case "htlcRefund":
       return account.htlcRefund(
         operation.resourceAddress,
@@ -232,6 +280,7 @@ export async function executeOperation(account: OotleAccount, operation: Transac
         BigInt(operation.amount),
         operation.outputMask,
         maxFee,
+        feeType,
       );
     default:
       throw new Error(`Unsupported operation kind: ${String((operation as { kind?: unknown }).kind)}`);
@@ -280,6 +329,23 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
     return value;
   };
 
+  /** `feeType`/`enforceFeeType`, shared by every kind that accepts them — see
+   * `TransactionRequestOperation`'s own doc comment on those two fields. */
+  const feeTypeFields = (): { feeType?: "private" | "transparent"; enforceFeeType?: boolean } => {
+    const feeType = p.feeType;
+    if (feeType !== undefined && feeType !== "private" && feeType !== "transparent") {
+      throw new Error('feeType must be "private" or "transparent".');
+    }
+    const enforceFeeType = p.enforceFeeType;
+    if (enforceFeeType !== undefined && typeof enforceFeeType !== "boolean") {
+      throw new Error("enforceFeeType must be a boolean.");
+    }
+    if (enforceFeeType && feeType === undefined) {
+      throw new Error("enforceFeeType requires feeType to also be set.");
+    }
+    return { feeType, enforceFeeType };
+  };
+
   const conditionsField = (): object[] => {
     const value = p.conditions;
     // The exact two-leaf tree the funder produced. Only its root is committed on-chain, so a wrong
@@ -292,7 +358,13 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
   switch (p.kind) {
     case "instructions":
       if (!Array.isArray(p.instructions)) throw new Error("instructions must be an array.");
-      return { kind: "instructions", instructions: p.instructions, maxFee: p.maxFee as string | undefined, inputs: p.inputs as unknown[] | undefined };
+      return {
+        kind: "instructions",
+        instructions: p.instructions,
+        maxFee: p.maxFee as string | undefined,
+        inputs: p.inputs as unknown[] | undefined,
+        ...feeTypeFields(),
+      };
     case "withdrawStealthAndExecute":
       if (!Array.isArray(p.followUpInstructions)) throw new Error("followUpInstructions must be an array.");
       return {
@@ -303,6 +375,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         followUpInstructions: p.followUpInstructions,
         relatedComponents: p.relatedComponents as string[] | undefined,
         maxFee: p.maxFee as string | undefined,
+        ...feeTypeFields(),
       };
     case "redeemStealthOutputAndExecute":
       if (!Array.isArray(p.followUpInstructions)) throw new Error("followUpInstructions must be an array.");
@@ -314,6 +387,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         followUpInstructions: p.followUpInstructions,
         relatedComponents: p.relatedComponents as string[] | undefined,
         maxFee: p.maxFee as string | undefined,
+        ...feeTypeFields(),
       };
     case "redeemStealthOutputWithPrivateFee":
       if (!Array.isArray(p.followUpInstructions)) throw new Error("followUpInstructions must be an array.");
@@ -337,6 +411,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         maxFee: p.maxFee as string | undefined,
         memo: p.memo as string | undefined,
         minimumValuePromise: promiseField(amount),
+        ...feeTypeFields(),
       };
     }
     case "unshield":
@@ -346,6 +421,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         revealedAmount: amountField("revealedAmount"),
         maxFee: p.maxFee as string | undefined,
         memo: p.memo as string | undefined,
+        ...feeTypeFields(),
       };
     case "depositConfidential":
       return {
@@ -353,6 +429,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         resourceAddress: stringField("resourceAddress"),
         amount: amountField("amount"),
         maxFee: p.maxFee as string | undefined,
+        ...feeTypeFields(),
       };
     case "sendPrivately": {
       const amount = amountField("amount");
@@ -364,6 +441,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         maxFee: p.maxFee as string | undefined,
         memo: p.memo as string | undefined,
         minimumValuePromise: promiseField(amount),
+        ...feeTypeFields(),
       };
     }
     case "htlcFund":
@@ -375,6 +453,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         hashLockHex: stringField("hashLockHex"),
         refundEpoch: amountField("refundEpoch"),
         maxFee: p.maxFee as string | undefined,
+        ...feeTypeFields(),
       };
     case "htlcClaim": {
       const preimageHex = stringField("preimageHex");
@@ -388,6 +467,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         conditions: conditionsField(),
         preimageHex,
         maxFee: p.maxFee as string | undefined,
+        ...feeTypeFields(),
       };
     }
     case "htlcRefund":
@@ -398,6 +478,7 @@ export function parseOperation(params: unknown): TransactionRequestOperation {
         conditions: conditionsField(),
         amount: amountField("amount"),
         outputMask: stringField("outputMask"),
+        ...feeTypeFields(),
         maxFee: p.maxFee as string | undefined,
       };
     default:

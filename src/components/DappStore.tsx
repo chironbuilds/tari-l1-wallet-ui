@@ -268,10 +268,10 @@ export function DappStore() {
  */
 function DappArt({ url, image, name }: { url: string; image?: string; name: string }) {
   const hue = hueOf(url);
-  const [src, setSrc] = useState<string | null>(() => cachedArtwork(url) ?? null);
+  const [src, setSrc] = useState<string | null>(() => cachedArtwork(url, image) ?? null);
 
   useEffect(() => {
-    const cached = cachedArtwork(url);
+    const cached = cachedArtwork(url, image);
     if (cached !== undefined) {
       setSrc(cached);
       return;

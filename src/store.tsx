@@ -120,6 +120,9 @@ interface Persisted {
   birthdayMs: number | null;
   lastScannedHeight: number | null;
   autoLockMinutes?: number;
+  /** Default fee-payment type for L2/Ootle transactions when a connected dApp doesn't enforce
+   * one. "transparent" (unchanged behavior) unless the user opts in to "private". */
+  feePrivacyDefault?: "private" | "transparent";
   subAddresses?: SubAddress[];
   /**
    * Chain output hash -> commitment, for outputs this wallet has spent.
@@ -224,6 +227,9 @@ interface Store {
   changePin: (oldPin: string, newPin: string) => Promise<boolean>;
   autoLockMinutes: number;
   setAutoLockMinutes: (minutes: number) => void;
+  /** See `Persisted.feePrivacyDefault`'s doc comment. */
+  feePrivacyDefault: "private" | "transparent";
+  setFeePrivacyDefault: (v: "private" | "transparent") => void;
   fundDemo: (valueMicro: bigint) => void;
   addScannedOutput: (handle: WasmWalletOutput, minedHeight: number, maturityHeight: number, raw?: ScanOutput) => void;
   getHandle: (id: string) => WasmWalletOutput | undefined;
@@ -268,6 +274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [walletLocked, setWalletLocked] = useState(false);
   const [lockedAddressHint, setLockedAddressHint] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutesState] = useState(5);
+  const [feePrivacyDefault, setFeePrivacyDefaultState] = useState<"private" | "transparent">("transparent");
   // Stashes the just-loaded persisted record while locked, so unlock() can finish the restore the
   // mount effect deferred instead of re-reading (and re-trusting) localStorage a second time.
   const pendingPersistedRef = useRef<Persisted | null>(null);
@@ -355,6 +362,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (p.lastScannedHeight) setLastScannedHeight(p.lastScannedHeight);
         if (p.subAddresses) setSubAddresses(p.subAddresses);
         if (p.autoLockMinutes !== undefined) setAutoLockMinutesState(p.autoLockMinutes);
+        if (p.feePrivacyDefault !== undefined) setFeePrivacyDefaultState(p.feePrivacyDefault);
         if (p.spentHashes) {
           for (const [hash, commitment] of Object.entries(p.spentHashes)) {
             spentHashRef.current.set(hash.toLowerCase(), commitment.toLowerCase());
@@ -393,6 +401,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       encBackup,
       publicAddressBase58: addressInfo?.base58,
       autoLockMinutes,
+      feePrivacyDefault,
       utxos,
       history,
       subAddresses,
@@ -420,6 +429,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     encBackup,
     addressInfo,
     autoLockMinutes,
+    feePrivacyDefault,
     utxos,
     history,
     subAddresses,
@@ -568,6 +578,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setAutoLockMinutes = useCallback((minutes: number) => {
     setAutoLockMinutesState(minutes);
+  }, []);
+
+  const setFeePrivacyDefault = useCallback((v: "private" | "transparent") => {
+    setFeePrivacyDefaultState(v);
   }, []);
 
   const fundDemo = useCallback(
@@ -1158,6 +1172,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     changePin,
     autoLockMinutes,
     setAutoLockMinutes,
+    feePrivacyDefault,
+    setFeePrivacyDefault,
     fundDemo,
     addScannedOutput,
     removeSpent,
