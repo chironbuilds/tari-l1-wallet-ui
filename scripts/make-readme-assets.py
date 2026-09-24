@@ -1,135 +1,181 @@
+"""Composes the README / announcement images from the raw UI captures.
+
+Run scripts/capture-readme-shots.mjs first; it writes 2x screenshots of a demo wallet to
+shots/readme-raw. This lays each one out on a 16:9 card (2400x1350, fine for X/Twitter and GitHub)
+with a headline column on the left and the cropped UI on the right. Every element is placed on a
+fixed grid inside the canvas, so nothing can run off an edge.
+"""
+
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
+RAW = ROOT / "shots" / "readme-raw"
 OUT = ROOT / "docs" / "screenshots"
 OUT.mkdir(parents=True, exist_ok=True)
-REG = r"C:\Windows\Fonts\segoeui.ttf"
-BOLD = r"C:\Windows\Fonts\segoeuib.ttf"
+
+W, H = 2400, 1350
+MARGIN = 120
+TEXT_W = 760  # left column
+SHOT_BOX = (960, 110, W - 90, H - 110)  # right column
+
+FONTS = r"C:\Windows\Fonts"
+BOLD = f"{FONTS}\\segoeuib.ttf"
+SEMI = f"{FONTS}\\seguisb.ttf"
+REG = f"{FONTS}\\segoeui.ttf"
+
+INK = (244, 243, 250)
+MUTED = (160, 156, 180)
+PURPLE = (157, 92, 255)
 
 
-def font(size, bold=False):
-    return ImageFont.truetype(BOLD if bold else REG, size)
+def font(path, size):
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError:
+        return ImageFont.truetype(REG, size)
 
 
-def gradient(size, top, bottom):
-    w, h = size
-    image = Image.new("RGB", size)
-    px = image.load()
-    for y in range(h):
-        t = y / max(1, h - 1)
-        color = tuple(int(top[i] * (1 - t) + bottom[i] * t) for i in range(3))
-        for x in range(w):
-            px[x, y] = color
-    return image
+def background(accent):
+    """Near-black with a soft accent glow behind the screenshot and a faint one top-left."""
+    base = Image.new("RGB", (W, H), (11, 10, 16))
+    glow = Image.new("RGB", (W, H), (0, 0, 0))
+    d = ImageDraw.Draw(glow)
+    d.ellipse((1100, 150, 2500, 1350), fill=tuple(int(c * 0.55) for c in accent))
+    d.ellipse((-400, -500, 700, 500), fill=tuple(int(c * 0.22) for c in accent))
+    glow = glow.filter(ImageFilter.GaussianBlur(260))
+    img = Image.blend(base, glow, 0.55)
+    return img.convert("RGBA")
 
 
-def rounded(image, box, radius, fill=None, outline=None, width=1):
-    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
-    image.alpha_composite(layer)
+def wrap(draw, text, fnt, width):
+    lines, line = [], ""
+    for word in text.split():
+        trial = f"{line} {word}".strip()
+        if draw.textlength(trial, font=fnt) <= width:
+            line = trial
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    return lines
 
 
-def fit(image, size):
-    copy = image.copy().convert("RGBA")
-    copy.thumbnail(size, Image.Resampling.LANCZOS)
-    return copy
+def text_column(img, step, eyebrow, headline, bullets, accent):
+    d = ImageDraw.Draw(img)
+    y = 170
+    # Step chip + eyebrow.
+    chip_f = font(BOLD, 30)
+    d.rounded_rectangle((MARGIN, y, MARGIN + 64, y + 64), 18, fill=accent + (255,))
+    tw = d.textlength(step, font=chip_f)
+    d.text((MARGIN + 32 - tw / 2, y + 11), step, font=chip_f, fill=(12, 10, 18))
+    d.text((MARGIN + 88, y + 12), eyebrow.upper(), font=font(BOLD, 30), fill=accent)
+    y += 120
+    h_f = font(BOLD, 78)
+    for line in wrap(d, headline, h_f, TEXT_W):
+        d.text((MARGIN, y), line, font=h_f, fill=INK)
+        y += 96
+    y += 44
+    b_f = font(REG, 34)
+    for bullet in bullets:
+        d.ellipse((MARGIN + 2, y + 17, MARGIN + 16, y + 31), fill=accent)
+        for i, line in enumerate(wrap(d, bullet, b_f, TEXT_W - 44)):
+            d.text((MARGIN + 40, y), line, font=b_f, fill=MUTED)
+            y += 48
+        y += 26
+    # Footer, pinned to the bottom of the column.
+    d.text((MARGIN, H - 150), "universe.tari.mw", font=font(BOLD, 34), fill=INK)
+    d.text((MARGIN, H - 104), "Open source · CPAL-1.0 · runs in your browser", font=font(REG, 26), fill=(118, 114, 138))
 
 
-def shadow(image, box, radius):
-    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-    x1, y1, x2, y2 = box
-    draw.rounded_rectangle((x1 + 10, y1 + 14, x2 + 10, y2 + 14), radius, fill=(0, 0, 0, 100))
-    layer = layer.filter(ImageFilter.GaussianBlur(18))
-    image.alpha_composite(layer)
+def place_shot(img, raw_name, crop, accent):
+    shot = Image.open(RAW / f"{raw_name}.png").convert("RGBA").crop(crop)
+    x1, y1, x2, y2 = SHOT_BOX
+    bw, bh = x2 - x1, y2 - y1
+    scale = min(bw / shot.width, bh / shot.height)
+    size = (round(shot.width * scale), round(shot.height * scale))
+    shot = shot.resize(size, Image.Resampling.LANCZOS)
+    x = x1 + (bw - size[0]) // 2
+    y = y1 + (bh - size[1]) // 2
+    radius = 28
+
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).rounded_rectangle((x + 8, y + 24, x + size[0] + 8, y + size[1] + 24), radius, fill=(0, 0, 0, 170))
+    img.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(34)))
+
+    mask = Image.new("L", size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius, fill=255)
+    img.paste(shot, (x, y), mask)
+    ImageDraw.Draw(img).rounded_rectangle(
+        (x, y, x + size[0] - 1, y + size[1] - 1), radius, outline=accent + (110,), width=3
+    )
 
 
-def label(draw, xy, text, color, fill):
-    text_font = font(18, True)
-    box = draw.textbbox((0, 0), text, font=text_font)
-    x, y = xy
-    draw.rounded_rectangle((x, y, x + box[2] - box[0] + 36, y + 50), 12, fill=fill)
-    draw.text((x + 18, y + 10), text, font=text_font, fill=color)
+CARDS = [
+    dict(
+        out="hero-wallet.png",
+        raw="dashboard",
+        crop=(0, 320, 2250, 1800),
+        step="1",
+        accent=(157, 92, 255),
+        eyebrow="Tari L1 Web Wallet",
+        headline="Your Tari wallet, in any browser.",
+        bullets=[
+            "Nothing to install and no chain to sync.",
+            "Keys and signing stay local, in WebAssembly.",
+            "MainNet and Esmeralda from one recovery phrase.",
+        ],
+    ),
+    dict(
+        out="ootle-flow.png",
+        raw="burn",
+        crop=(690, 140, 2195, 1670),
+        step="2",
+        accent=(255, 138, 61),
+        eyebrow="Burn to Ootle",
+        headline="Burn on L1. Claim on Ootle.",
+        bullets=[
+            "Burn XTM on layer 1, signed in the browser.",
+            "The wallet fetches the merkle proof itself.",
+            "Claimed into your Ootle account as private TARI, automatically.",
+        ],
+    ),
+    dict(
+        out="ootle-apps.png",
+        raw="apps",
+        crop=(680, 290, 2200, 1510),
+        step="3",
+        accent=(64, 214, 160),
+        eyebrow="Ootle apps",
+        headline="Your Ootle account, ready for dApps.",
+        bullets=[
+            "window.tari, the same provider API as the Sapient extension.",
+            "You review and approve every transaction.",
+            "Private sends, shield and unshield built in.",
+        ],
+    ),
+    dict(
+        out="security-recovery.png",
+        raw="pin-gate",
+        crop=(170, 480, 2230, 1800),
+        step="4",
+        accent=(236, 222, 72),
+        eyebrow="Security",
+        headline="Your seed stays behind your PIN.",
+        bullets=[
+            "Seed encrypted on this device by your PIN.",
+            "Settings ask for the PIN every time.",
+            "Auto-lock and 24-word CipherSeed recovery.",
+        ],
+    ),
+]
 
 
-def make_hero():
-    w, h = 1800, 1000
-    image = gradient((w, h), (8, 12, 18), (24, 14, 38)).convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    draw.text((80, 60), "TARI L1 WEB WALLET", font=font(25, True), fill=(151, 242, 193))
-    draw.text((80, 105), "Your keys. Your browser. Your layer 2.", font=font(54, True), fill=(245, 245, 248))
-    draw.text((84, 180), "Self-custodial Minotari with Ootle built in.", font=font(26), fill=(172, 170, 190))
-    shadow(image, (50, 250, 1750, 850), 32)
-    rounded(image, (50, 250, 1750, 850), 32, fill=(25, 27, 34, 255), outline=(94, 79, 126, 255), width=2)
-    draw = ImageDraw.Draw(image)
-    draw.ellipse((82, 278, 98, 294), fill=(255, 104, 72))
-    draw.ellipse((110, 278, 126, 294), fill=(255, 190, 70))
-    draw.ellipse((138, 278, 154, 294), fill=(91, 230, 164))
-    draw.text((192, 274), "universe.tari.mw", font=font(19), fill=(166, 163, 184))
-    source = Image.open(OUT / "dashboard.jpg").convert("RGB")
-    shot = ImageOps.fit(source, (1640, 600), method=Image.Resampling.LANCZOS, centering=(0.5, 0.48))
-    image.alpha_composite(shot.convert("RGBA"), (80, 320))
-    label(draw, (90, 886), "LOCAL SIGNING", (177, 250, 208), (30, 65, 45, 255))
-    label(draw, (420, 886), "Ootle L2", (224, 194, 255), (61, 37, 91, 255))
-    label(draw, (680, 886), "SUB-ADDRESSES", (183, 220, 255), (26, 55, 83, 255))
-    label(draw, (1010, 886), "DAPPS", (255, 222, 166), (82, 55, 25, 255))
-    draw.text((1430, 905), "SELF-CUSTODIAL / OPEN SOURCE", font=font(16, True), fill=(146, 143, 164))
-    image.convert("RGB").save(OUT / "hero-wallet.png", quality=95)
-
-
-def make_ootle():
-    w, h = 1600, 900
-    image = gradient((w, h), (11, 14, 20), (28, 18, 22)).convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    draw.text((80, 60), "BURN TO OOTLE", font=font(24, True), fill=(255, 151, 77))
-    draw.text((80, 103), "From L1 to private layer 2, in one flow.", font=font(48, True), fill=(248, 246, 250))
-    draw.text((84, 171), "Burn locally. Claim automatically when the proof is ready.", font=font(24), fill=(185, 178, 187))
-    cards = [(70, 280, 680, 760), (920, 280, 1530, 760)]
-    for box in cards:
-        shadow(image, box, 28)
-        rounded(image, box, 28, fill=(25, 27, 34, 255), outline=(92, 72, 76, 255), width=2)
-    burn = fit(Image.open(OUT / "burn.png"), (560, 370))
-    ootle = fit(Image.open(OUT / "ootle-claimed.png"), (560, 370))
-    image.alpha_composite(burn, (95, 325))
-    image.alpha_composite(ootle, (945, 300))
-    draw = ImageDraw.Draw(image)
-    draw.text((112, 690), "01  BURN ON L1", font=font(22, True), fill=(255, 190, 143))
-    draw.text((962, 690), "02  CLAIM ON Ootle", font=font(22, True), fill=(183, 247, 203))
-    draw.line((700, 510, 900, 510), fill=(191, 126, 255), width=5)
-    draw.polygon([(900, 510), (870, 492), (870, 528)], fill=(191, 126, 255))
-    draw.text((710, 455), "signed", font=font(18, True), fill=(205, 194, 224))
-    draw.text((710, 540), "in your browser", font=font(18), fill=(164, 158, 177))
-    image.convert("RGB").save(OUT / "ootle-flow.png", quality=95)
-
-
-def make_security():
-    w, h = 1600, 900
-    image = gradient((w, h), (9, 15, 20), (15, 28, 25)).convert("RGBA")
-    draw = ImageDraw.Draw(image)
-    draw.text((80, 60), "SELF-CUSTODIAL BY DESIGN", font=font(24, True), fill=(139, 235, 188))
-    draw.text((80, 103), "Security that stays in your hands.", font=font(48, True), fill=(247, 248, 246))
-    draw.text((84, 171), "Recovery, lock and signing controls built into the wallet.", font=font(24), fill=(171, 187, 181))
-    shadow(image, (50, 250, 1200, 850), 30)
-    rounded(image, (50, 250, 1200, 850), 30, fill=(239, 243, 239, 255), outline=(111, 156, 137, 255), width=2)
-    source = Image.open(ROOT / "shots" / "05-scan.png").convert("RGB")
-    shot = ImageOps.contain(source, (1080, 560), method=Image.Resampling.LANCZOS)
-    image.alpha_composite(shot.convert("RGBA"), (85, 270))
-    shadow(image, (1240, 250, 1750, 850), 30)
-    rounded(image, (1240, 250, 1750, 850), 30, fill=(25, 45, 38, 255), outline=(76, 133, 105, 255), width=2)
-    draw = ImageDraw.Draw(image)
-    draw.text((1290, 310), "YOUR WALLET,", font=font(20, True), fill=(142, 235, 188))
-    draw.text((1290, 340), "YOUR RULES.", font=font(30, True), fill=(239, 250, 241))
-    draw.rounded_rectangle((1290, 420, 1700, 510), 18, fill=(35, 75, 55, 255))
-    draw.text((1315, 447), "PIN LOCK + AUTO-LOCK", font=font(18, True), fill=(183, 250, 207))
-    draw.rounded_rectangle((1290, 535, 1700, 625), 18, fill=(53, 49, 88, 255))
-    draw.text((1315, 562), "LOCAL WASM SIGNING", font=font(18, True), fill=(229, 215, 255))
-    draw.rounded_rectangle((1290, 650, 1700, 740), 18, fill=(86, 61, 31, 255))
-    draw.text((1315, 677), "CIPHERSEED RECOVERY", font=font(18, True), fill=(255, 220, 161))
-    image.convert("RGB").save(OUT / "security-recovery.png", quality=95)
-
-
-make_hero()
-make_ootle()
-make_security()
+for card in CARDS:
+    image = background(card["accent"])
+    place_shot(image, card["raw"], card["crop"], card["accent"])
+    text_column(image, card["step"], card["eyebrow"], card["headline"], card["bullets"], card["accent"])
+    image.convert("RGB").save(OUT / card["out"], optimize=True)
+    print("wrote", card["out"])

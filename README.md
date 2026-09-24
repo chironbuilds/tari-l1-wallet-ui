@@ -60,12 +60,14 @@ never refunded.
 - Claim a burn made elsewhere, such as a `minotari_console_wallet` proof file, from the Ootle side.
 - MainNet burns are allowed but clearly marked as not claimable yet: Ootle does not run on MainNet.
 
-![L1 burn flowing into a private Ootle balance](docs/screenshots/ootle-flow.png)
+![Burn to Ootle: burn XTM on L1, claimed on Ootle automatically](docs/screenshots/ootle-flow.png)
 
 ### Ootle (layer 2)
 
 The Ootle account derived from the same seed, on the Esmeralda testnet: public and private sends,
 shield and unshield, rediscovering private funds, the testnet faucet, and a catalogue of Ootle apps.
+
+![Ootle apps catalogue and the window.tari dApp connector](docs/screenshots/ootle-apps.png)
 
 ### Also includes
 
@@ -78,7 +80,7 @@ shield and unshield, rediscovering private funds, the testnet faucet, and a cata
   from Activity.
 - Developer tools: Blake2b hashing, Ristretto Schnorr signatures and Pedersen commitments.
 
-![Security, recovery and local signing controls](docs/screenshots/security-recovery.png)
+![PIN-protected security and recovery settings](docs/screenshots/security-recovery.png)
 
 ## Running it
 
