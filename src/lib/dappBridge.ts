@@ -12,6 +12,8 @@
  * enciphered seed lives.
  */
 
+import { summarizeInstructionArray } from "../ootle/instructionSummary";
+
 export const PROTOCOL = "tari-dapp-bridge/1";
 
 /**
@@ -563,25 +565,12 @@ export function describeRequest(method: BridgeMethod, params: Record<string, unk
     case "tari_createTransactionRequest":
       return describeOperation(params as unknown as TransactionRequestOperation);
     case "tari_signAndSubmitTransaction": {
-      const instructions = Array.isArray(params.instructions) ? params.instructions : [];
-      const lines = [
+      const instructions = summarizeInstructionArray(params.instructions);
+      return [
         `Sign and submit a transaction with ${instructions.length} instruction${instructions.length === 1 ? "" : "s"}`,
         `Max fee ${String(params.maxFee ?? "5000")}`,
+        ...instructions,
       ];
-      // Named methods and addresses are the part worth reading before approving.
-      for (const instr of instructions.slice(0, 4)) {
-        const call = instr as Record<string, Record<string, unknown>>;
-        const kind = Object.keys(call)[0];
-        if (kind === "CallMethod") {
-          const body = call.CallMethod as Record<string, unknown>;
-          const target = (body.call as Record<string, unknown> | undefined)?.Address;
-          lines.push(`· ${String(body.method)} on ${shortId(String(target ?? "?"))}`);
-        } else if (kind) {
-          lines.push(`· ${kind}`);
-        }
-      }
-      if (instructions.length > 4) lines.push(`· …and ${instructions.length - 4} more`);
-      return lines;
     }
     default:
       return [method];
@@ -622,18 +611,18 @@ export function describeOperation(operation: TransactionRequestOperation): strin
     case "withdrawStealthAndExecute":
       return [
         `Reveal ${operation.amount} of ${shortId(operation.resourceAddress)} for use in this transaction`,
-        `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
+        ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "redeemStealthOutputAndExecute":
       return [
         `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
-        `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
+        ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "redeemStealthOutputWithPrivateFee":
       return [
         `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
         `Pay the fee from a separate stealth UTXO (${shortId(operation.feeCommitmentHex)}) — this wallet's address is never revealed`,
-        `Then run ${(operation.followUpInstructions ?? []).length} follow-up instruction(s) supplied by the site`,
+        ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "shield":
       return [

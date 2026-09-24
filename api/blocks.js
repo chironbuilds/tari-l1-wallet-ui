@@ -1,4 +1,4 @@
-import { getClient, hex, mapOutput, mapOutputScan, json, CORS } from "./_grpc.js";
+import { getClient, hex, mapOutput, mapOutputScan, json, corsHeaders, allowRequest } from "./_grpc.js";
 
 const MAX_SPAN = 100;
 /** Heights pulled from the node per round. Small, so a budget stop wastes little work. */
@@ -18,7 +18,7 @@ const BUDGET = { scan: 6000, full: 1200 };
 function fetchHeights(heights) {
   return new Promise((resolve, reject) => {
     const out = [];
-    const call = getClient().getBlocks({ heights });
+    const call = getClient().getBlocks({ heights }, { deadline: Date.now() + 10_000 });
     call.on("data", (hb) => {
       out.push({
         height: Number(hb.block?.header?.height ?? 0),
@@ -62,9 +62,10 @@ async function fetchGroup(heights) {
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, CORS);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
+  if (!allowRequest(req, 60)) return json(res, 429, { error: "rate limit exceeded" });
   const url = new URL(req.url, "http://localhost");
   const from = Number(url.searchParams.get("from"));
   let to = Number(url.searchParams.get("to") ?? from);

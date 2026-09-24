@@ -1,13 +1,14 @@
-import { getClient, json, CORS } from "./_grpc.js";
+import { getClient, json, corsHeaders, allowRequest } from "./_grpc.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, CORS);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
+  if (!allowRequest(req, 60)) return json(res, 429, { error: "rate limit exceeded" });
   try {
     const r = await new Promise((resolve, reject) => {
-      getClient().getTipInfo({}, (err, resp) =>
+      getClient().getTipInfo({}, { deadline: Date.now() + 10_000 }, (err, resp) =>
         err ? reject(err) : resolve(resp),
       );
     });

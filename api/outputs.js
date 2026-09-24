@@ -1,4 +1,4 @@
-import { getClient, hex, mapOutput, json, CORS } from "./_grpc.js";
+import { getClient, hex, mapOutput, json, corsHeaders, allowRequest } from "./_grpc.js";
 
 /**
  * Full records for named outputs in one block.
@@ -12,7 +12,7 @@ const MAX_COMMITMENTS = 256;
 function fetchBlock(height) {
   return new Promise((resolve, reject) => {
     const out = [];
-    const call = getClient().getBlocks({ heights: [height] });
+    const call = getClient().getBlocks({ heights: [height] }, { deadline: Date.now() + 10_000 });
     call.on("data", (hb) => {
       out.push(...(hb.block?.body?.outputs || []));
     });
@@ -23,9 +23,10 @@ function fetchBlock(height) {
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, CORS);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
+  if (!allowRequest(req, 60)) return json(res, 429, { error: "rate limit exceeded" });
   const url = new URL(req.url, "http://localhost");
   const height = Number(url.searchParams.get("height"));
   const wanted = (url.searchParams.get("commitments") ?? "")

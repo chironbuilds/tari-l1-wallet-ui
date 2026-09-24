@@ -7,6 +7,7 @@ dist
 
 # A real recovery phrase and a large reference screenshot, not source -- never commit the seed.
 tari seed.txt
+taritestseed.txt
 original tari UI.png
 
 # One-off debug scripts with a 24-word recovery phrase hardcoded inline (not read from the

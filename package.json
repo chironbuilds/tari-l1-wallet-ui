@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "server": "node server/index.js",
-    "server:local": "node server/index.js --host 127.0.0.1:18142 --tls 0"
+    "server:local": "node server/index.js --bind 127.0.0.1 --host 127.0.0.1:18142 --tls 0"
   },
   "dependencies": {
     "@chironbuilder/ootle-sdk": "^0.1.13",

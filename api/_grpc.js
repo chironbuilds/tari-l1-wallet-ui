@@ -9,6 +9,31 @@ export { serdeTxToProtoRequest };
 const PROTO_DIR = path.join(process.cwd(), "server", "proto");
 const HOST = process.env.GRPC_HOST || "grpc.tari.com:443";
 const TLS = (process.env.GRPC_TLS ?? "1") !== "0";
+const GRPC_MAX_RECEIVE_BYTES = 16 * 1024 * 1024;
+const GRPC_MAX_SEND_BYTES = 4 * 1024 * 1024;
+const RPC_DEADLINE_MS = 10_000;
+const SUBMIT_DEADLINE_MS = 20_000;
+const CORS_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS ?? "https://universe.tari.mw,http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+const rateBuckets = new Map();
+
+export function allowRequest(req, limit) {
+  const now = Date.now();
+  const forwarded = req.headers["x-forwarded-for"];
+  const key = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim() || req.socket?.remoteAddress || "unknown";
+  const current = rateBuckets.get(key);
+  if (!current || now >= current.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (current.count >= limit) return false;
+  current.count += 1;
+  return true;
+}
 
 let cachedClient = null;
 
@@ -25,8 +50,8 @@ export function getClient() {
     HOST,
     TLS ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
     {
-      "grpc.maxReceiveMessageLength": -1,
-      "grpc.maxSendMessageLength": -1,
+      "grpc.maxReceiveMessageLength": GRPC_MAX_RECEIVE_BYTES,
+      "grpc.maxSendMessageLength": GRPC_MAX_SEND_BYTES,
     },
   );
   return cachedClient;
@@ -90,11 +115,19 @@ export function mapOutput(o) {
   return out;
 }
 
-export const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-headers": "content-type",
-  "access-control-allow-methods": "GET,POST,OPTIONS",
-};
+export function corsHeaders(req) {
+  const origin = req?.headers?.origin;
+  return origin && CORS_ORIGINS.has(origin)
+    ? {
+        "access-control-allow-origin": origin,
+        vary: "Origin",
+        "access-control-allow-headers": "content-type",
+        "access-control-allow-methods": "GET,POST,OPTIONS",
+      }
+    : {};
+}
+
+export const CORS = corsHeaders();
 
 const pbRoot = protobuf.loadSync(path.join(PROTO_DIR, "base_node.proto"));
 export const SubmitTxReq = pbRoot.lookupType("tari.rpc.SubmitTransactionRequest");
@@ -122,12 +155,14 @@ export function submitTransactionRaw(requestBuf) {
           return { result: SUBMIT_RESULT_NAMES[code] ?? String(code) };
         },
         requestBuf,
+        {},
+        { deadline: Date.now() + SUBMIT_DEADLINE_MS },
         (err, resp) => (err ? reject(err) : resolve(resp)),
       );
   });
 }
 
 export function json(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json", ...CORS });
+  res.writeHead(status, { "content-type": "application/json", ...corsHeaders(res.req) });
   res.end(JSON.stringify(body));
 }

@@ -493,7 +493,13 @@ export function DappFrame({
           }
         }
 
-        const approved = await askUser(req.id, req.method, params);
+        let summary;
+        try {
+          summary = describeRequest(req.method, params);
+        } catch (e) {
+          return { error: ERROR.internal(e instanceof Error ? e.message : String(e)) };
+        }
+        const approved = await askUser(req.id, req.method, params, { summary });
         if (!approved) return { error: ERROR.rejected };
         try {
           const result = await account.execute(instructions as never[], { maxFee, inputs });

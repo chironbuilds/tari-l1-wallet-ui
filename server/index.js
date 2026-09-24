@@ -17,9 +17,42 @@ const arg = (name) => {
 
 const GRPC_HOST = arg("host") || process.env.GRPC_HOST || "grpc.tari.com:443";
 const GRPC_TLS = (arg("tls") ?? process.env.GRPC_TLS ?? "1") !== "0";
+const HTTP_BIND = arg("bind") || process.env.HTTP_BIND || "127.0.0.1";
+const HTTP_PUBLIC = (arg("public") ?? process.env.HTTP_PUBLIC ?? "0") === "1";
+const LISTEN_ADDRESS = HTTP_PUBLIC ? "0.0.0.0" : HTTP_BIND;
 const PORT = Number(arg("port") || process.env.PORT || 8080);
 const MAX_BLOCK_BATCH = 1000;
 const PARALLEL_STREAMS = 4;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const GRPC_MAX_RECEIVE_BYTES = 16 * 1024 * 1024;
+const GRPC_MAX_SEND_BYTES = 4 * 1024 * 1024;
+const RPC_DEADLINE_MS = 10_000;
+const SUBMIT_DEADLINE_MS = 20_000;
+const CORS_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS ?? "https://universe.tari.mw,http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+const MAX_IN_FLIGHT = 8;
+const RATE_WINDOW_MS = 60_000;
+const RATE_LIMIT = 60;
+const SUBMIT_RATE_LIMIT = 10;
+const rateBuckets = new Map();
+let activeRequests = 0;
+
+function allowRequest(req, limit) {
+  const now = Date.now();
+  const key = req.socket.remoteAddress || "unknown";
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= limit) return false;
+  bucket.count += 1;
+  return true;
+}
 
 const packageDef = protoLoader.loadSync(path.join(__dirname, "proto", "base_node.proto"), {
   includeDirs: [path.join(__dirname, "proto")],
@@ -33,8 +66,8 @@ const client = new BaseNode(
   GRPC_HOST,
   GRPC_TLS ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
   {
-    "grpc.maxReceiveMessageLength": -1,
-    "grpc.maxSendMessageLength": -1,
+    "grpc.maxReceiveMessageLength": GRPC_MAX_RECEIVE_BYTES,
+    "grpc.maxSendMessageLength": GRPC_MAX_SEND_BYTES,
   },
 );
 
@@ -57,6 +90,8 @@ function submitTransactionRaw(requestBuf) {
         return { result: RESULT_NAMES[code] ?? String(code) };
       },
       requestBuf,
+      {},
+      { deadline: Date.now() + SUBMIT_DEADLINE_MS },
       (err, resp) => (err ? reject(err) : resolve(resp)),
     );
   });
@@ -99,20 +134,57 @@ function mapOutput(o) {
   };
 }
 
-function json(res, status, body) {
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  return origin && CORS_ORIGINS.has(origin)
+    ? {
+        "access-control-allow-origin": origin,
+        vary: "Origin",
+        "access-control-allow-headers": "content-type",
+        "access-control-allow-methods": "GET,POST,OPTIONS",
+      }
+    : {};
+}
+
+function json(req, res, status, body) {
   const data = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json",
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "content-type",
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    ...corsHeaders(req),
   });
   res.end(data);
 }
 
+async function readJsonBody(req) {
+  const declared = Number(req.headers["content-length"]);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    const error = new Error("request body too large");
+    error.statusCode = 413;
+    throw error;
+  }
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) {
+      const error = new Error("request body too large");
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+  } catch {
+    const error = new Error("invalid JSON body");
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 async function getTip() {
   return new Promise((resolve, reject) => {
-    client.getTipInfo({}, (err, resp) => {
+    client.getTipInfo({}, { deadline: Date.now() + RPC_DEADLINE_MS }, (err, resp) => {
       if (err) return reject(err);
       resolve({
         height: Number(resp.metadata?.bestBlockHeight ?? 0),
@@ -127,7 +199,7 @@ async function getTip() {
 async function fetchHeights(heights) {
   return new Promise((resolve, reject) => {
     const out = [];
-    const call = client.getBlocks({ heights });
+    const call = client.getBlocks({ heights }, { deadline: Date.now() + RPC_DEADLINE_MS });
     call.on("data", (hb) => {
       const height = Number(hb.block?.header?.height ?? 0);
       const outputs = (hb.block?.body?.outputs || []).map(mapOutput);
@@ -178,47 +250,48 @@ async function getBlocks(from, to) {
 
 const server = http.createServer(async (req, res) => {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "content-type",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-    });
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
   const url = new URL(req.url, "http://localhost");
+  const limit = url.pathname === "/api/submit" ? SUBMIT_RATE_LIMIT : RATE_LIMIT;
+  if (!allowRequest(req, limit)) return json(req, res, 429, { error: "rate limit exceeded" });
+  if (activeRequests >= MAX_IN_FLIGHT) return json(req, res, 503, { error: "service busy" });
+  activeRequests += 1;
   try {
     if (req.method === "GET" && url.pathname === "/api/tip") {
-      return json(res, 200, await getTip());
+      return json(req, res, 200, await getTip());
     }
     if (req.method === "GET" && url.pathname === "/api/blocks") {
       const from = Number(url.searchParams.get("from"));
       let to = Number(url.searchParams.get("to") ?? from);
       if (!Number.isFinite(from) || from <= 0 || to < from) {
-        return json(res, 400, { error: "invalid range" });
+        return json(req, res, 400, { error: "invalid range" });
       }
       to = Math.min(to, from + MAX_BLOCK_BATCH - 1);
       const { blocks } = await getBlocks(from, to);
-      return json(res, 200, { blocks });
+      return json(req, res, 200, { blocks });
     }
     if (req.method === "GET" && url.pathname === "/api/utxo") {
       const hash = url.searchParams.get("hash");
-      if (!hash || !/^[0-9a-fA-F]{64}$/.test(hash)) return json(res, 400, { error: "invalid hash" });
+      if (!hash || !/^[0-9a-fA-F]{64}$/.test(hash)) return json(req, res, 400, { error: "invalid hash" });
       const found = await new Promise((resolve) => {
-        const stream = client.fetchMatchingUtxos({ hashes: [Buffer.from(hash, "hex")] });
+        const stream = client.fetchMatchingUtxos(
+          { hashes: [Buffer.from(hash, "hex")] },
+          { deadline: Date.now() + RPC_DEADLINE_MS },
+        );
         const out = [];
         stream.on("data", (d) => out.push(d));
         stream.on("error", () => resolve(null));
         stream.on("end", () => resolve(out.length > 0));
       });
-      return json(res, 200, { unspent: found === true });
+      return json(req, res, 200, { unspent: found === true });
     }
     if (req.method === "POST" && url.pathname === "/api/submit") {
-      let raw = "";
-      for await (const chunk of req) raw += chunk;
-      const body = JSON.parse(raw || "{}");
+      const body = await readJsonBody(req);
       if (body.request_b64) {
         const buf = Buffer.from(body.request_b64, "base64");
-        if (buf.length === 0) return json(res, 400, { error: "invalid request bytes" });
+        if (buf.length === 0) return json(req, res, 400, { error: "invalid request bytes" });
         if (process.env.TX_DEBUG_DIR) {
           try {
             fs.mkdirSync(process.env.TX_DEBUG_DIR, { recursive: true });
@@ -226,17 +299,17 @@ const server = http.createServer(async (req, res) => {
           } catch {}
         }
         const resp = await submitTransactionRaw(buf);
-        return json(res, 200, { result: resp.result ?? "NONE" });
+        return json(req, res, 200, { result: resp.result ?? "NONE" });
       }
       let txObj = body.transaction;
       if (!txObj && body.transaction_json) {
         try {
           txObj = JSON.parse(body.transaction_json);
         } catch {
-          return json(res, 400, { error: "invalid transaction_json" });
+          return json(req, res, 400, { error: "invalid transaction_json" });
         }
       }
-      if (!txObj) return json(res, 400, { error: "missing transaction" });
+      if (!txObj) return json(req, res, 400, { error: "missing transaction" });
       const mapped = serdeTxToProtoRequest(txObj);
       const reqBytes = SubmitTxReq.encode(SubmitTxReq.fromObject(mapped)).finish();
       if (process.env.TX_DEBUG_DIR) {
@@ -246,20 +319,22 @@ const server = http.createServer(async (req, res) => {
         } catch {}
       }
       const resp = await submitTransactionRaw(Buffer.from(reqBytes));
-      return json(res, 200, { result: resp.result ?? "NONE" });
+      return json(req, res, 200, { result: resp.result ?? "NONE" });
     }
     if (req.method === "GET" && url.pathname === "/api/health") {
-      return json(res, 200, { ok: true, grpcHost: GRPC_HOST, tls: GRPC_TLS });
+      return json(req, res, 200, { ok: true, service: "tari-l1-wallet-ui", status: "ready" });
     }
-    return json(res, 404, { error: "not found" });
+    return json(req, res, 404, { error: "not found" });
   } catch (e) {
-    return json(res, 502, { error: e?.message || String(e) });
+    return json(req, res, e?.statusCode ?? (e?.code === 4 ? 504 : 502), { error: e?.message || String(e) });
+  } finally {
+    activeRequests -= 1;
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, LISTEN_ADDRESS, () => {
   console.log(
-    `[tari-middleware] HTTP on :${PORT}  →  gRPC ${GRPC_HOST} (${GRPC_TLS ? "tls" : "insecure"})`,
+    `[tari-middleware] HTTP on ${LISTEN_ADDRESS}:${PORT}  →  gRPC ${GRPC_HOST} (${GRPC_TLS ? "tls" : "insecure"})`,
   );
   console.log(`[tari-middleware] endpoints: /api/tip /api/blocks?from=&to= /api/submit /api/health`);
 });

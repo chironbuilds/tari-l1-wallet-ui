@@ -1,18 +1,17 @@
-import { getClient, submitTransactionRaw, serdeTxToProtoRequest, SubmitTxReq, json, CORS } from "./_grpc.js";
+import { submitTransactionRaw, serdeTxToProtoRequest, SubmitTxReq, json, corsHeaders, allowRequest } from "./_grpc.js";
+
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {
-    res.writeHead(204, CORS);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
+  if (!allowRequest(req, 10)) return json(res, 429, { error: "rate limit exceeded" });
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
-  let raw = "";
-  for await (const chunk of req) raw += chunk;
-  let body;
-  try {
-    body = JSON.parse(raw || "{}");
-  } catch {
-    return json(res, 400, { error: "invalid json" });
+  const body = req.body;
+  if (Buffer.byteLength(JSON.stringify(body ?? {})) > MAX_BODY_BYTES) {
+    return json(res, 413, { error: "request body too large" });
   }
   try {
     let requestBuf;
