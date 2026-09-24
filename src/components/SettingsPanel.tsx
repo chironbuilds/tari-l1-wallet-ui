@@ -500,6 +500,19 @@ export function SettingsPanel() {
           created for; to use another network, erase this wallet and restore it there.
         </p>
       </Card>
+
+      {/* CPAL-1.0 Exhibit B attribution: deployments of this code keep this notice visible. */}
+      <p className="text-center text-[11px] text-zinc-500 lg:col-span-2">
+        Built on the Tari L1 Web Wallet by chironbuilds · Copyright (c) 2026 chironbuilds ·{" "}
+        <a
+          href="https://github.com/chironbuilds/tari-l1-wallet-ui"
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-dotted hover:text-[var(--tari-text)]"
+        >
+          Source (CPAL-1.0)
+        </a>
+      </p>
     </div>
   );
 }

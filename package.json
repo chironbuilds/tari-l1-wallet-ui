@@ -1,6 +1,7 @@
 {
   "name": "tari-l1-wallet-ui",
   "private": true,
+  "license": "CPAL-1.0",
   "version": "0.1.0",
   "type": "module",
   "overrides": {
