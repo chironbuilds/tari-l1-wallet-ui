@@ -18,4 +18,20 @@ export default defineConfig({
   build: {
     target: "esnext",
   },
+  // Same-origin routes to each network's node. The nodes' CORS allows reads but not a broadcast
+  // POST, and a same-origin request has no preflight. Mirrored by the rewrites in vercel.json.
+  server: {
+    proxy: {
+      "/rpc/mainnet": {
+        target: "https://rpc.tari.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/rpc\/mainnet/, ""),
+      },
+      "/rpc/esmeralda": {
+        target: "https://rpc.esmeralda.tari.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/rpc\/esmeralda/, ""),
+      },
+    },
+  },
 });

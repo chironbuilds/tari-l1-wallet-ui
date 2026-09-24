@@ -3,16 +3,18 @@ import {
   AlertCircle,
   ArrowDownLeft,
   ArrowUpRight,
-  Download,
-  FlaskConical,
+  Code2,
+  Flame,
   Grid3x3,
   History,
   Loader2,
   Lock,
+  Layers,
   Moon,
   QrCode,
   Send,
   Settings as SettingsIcon,
+  ShieldCheck,
   Sun,
   Tag,
   Wallet as WalletIcon,
@@ -36,9 +38,23 @@ import { L2ReceivePanel } from "./L2ReceivePanel";
 import { SubAddressPanel } from "./SubAddressPanel";
 import { AddressSwitcher } from "./AddressSwitcher";
 import { LayerJump } from "./LayerJump";
-import { SoonMascot } from "./SoonMascot";
+import { BurnPanel } from "./BurnPanel";
+import { ClaimBurnPanel } from "./ClaimBurnPanel";
+import { coinSymbol, networkLabel } from "../lib/tari";
 
-type Panel = "send" | "receive" | "activity" | "tools" | "settings" | "l2send" | "l2receive" | "subaddresses" | "dapps" | null;
+type Panel =
+  | "send"
+  | "receive"
+  | "activity"
+  | "tools"
+  | "settings"
+  | "l2send"
+  | "l2receive"
+  | "subaddresses"
+  | "dapps"
+  | "burn"
+  | "claimburn"
+  | null;
 
 /** True while the viewport is phone-sized. Re-evaluates on rotation and resize. */
 function useIsPhone() {
@@ -101,6 +117,8 @@ export function Dashboard() {
   const failedCount = store.history.filter((t) => t.status === "failed").length;
   const recent = [...store.history].sort((a, b) => b.createdAt - a.createdAt);
   const openPanel = (p: Panel) => setPanel(p);
+  const symbol = coinSymbol(store.network);
+  const isMainnet = store.network === "mainnet";
 
   return (
     <div className="pointer-events-none relative flex h-[100dvh] w-full flex-col p-2 md:p-[10px]">
@@ -123,7 +141,7 @@ export function Dashboard() {
           }}
         >
           <div className="hidden md:block">
-            <button className="un-rail-btn" title="Tari" onClick={() => openPanel("settings")}>
+            <button className="un-rail-btn" title="Settings" onClick={() => openPanel("settings")}>
               <Logo size={30} />
             </button>
           </div>
@@ -134,20 +152,20 @@ export function Dashboard() {
             </button>
             <button
               className="un-rail-btn"
-              title={store.layer === "L2" ? "Send on Ootle" : "Send XTM"}
+              title={store.layer === "L2" ? "Send on Ootle" : `Send ${symbol}`}
               onClick={() => openPanel(store.layer === "L2" ? "l2send" : "send")}
             >
               <Send size={20} />
             </button>
             <button
               className="un-rail-btn"
-              title={store.layer === "L2" ? "Receive on Ootle" : "Receive XTM"}
+              title={store.layer === "L2" ? "Receive on Ootle" : `Receive ${symbol}`}
               onClick={() => openPanel(store.layer === "L2" ? "l2receive" : "receive")}
             >
               <QrCode size={20} />
             </button>
             <button
-              className="un-rail-btn"
+              className="un-rail-btn rail-secondary"
               title="Sub-addresses"
               onClick={() => openPanel("subaddresses")}
             >
@@ -162,14 +180,21 @@ export function Dashboard() {
             </button>
             <button
               className="un-rail-btn"
-              title="Crypto lab"
-              onClick={() => openPanel("tools")}
+              title="Burn to Ootle"
+              onClick={() => openPanel("burn")}
             >
-              <FlaskConical size={20} />
+              <Flame size={20} />
             </button>
             <button
-              className="un-rail-btn"
-              title="dApp store"
+              className="un-rail-btn rail-secondary"
+              title="Developer tools"
+              onClick={() => openPanel("tools")}
+            >
+              <Code2 size={20} />
+            </button>
+            <button
+              className="un-rail-btn rail-secondary"
+              title="Ootle apps"
               onClick={() => openPanel("dapps")}
             >
               <Grid3x3 size={20} />
@@ -178,7 +203,7 @@ export function Dashboard() {
 
           <div className="flex flex-row items-center gap-1 md:flex-col md:gap-2.5">
             <button
-              className="un-rail-btn"
+              className="un-rail-btn rail-secondary"
               title="Toggle theme"
               onClick={() => setDark((d) => !d)}
             >
@@ -219,7 +244,6 @@ export function Dashboard() {
               </div>
             ) : (
               <>
-            {/* Olive wallet card — balance on top */}
             <div className="wallet-card p-4">
               <div className="flex items-center justify-between gap-2">
                 <AddressSwitcher onAddNew={() => openPanel("subaddresses")} />
@@ -238,24 +262,22 @@ export function Dashboard() {
                 ) : (
                   <>
                     {formatMicro(store.unlockedMicro)}{" "}
-                    <span className="text-xs font-bold opacity-80">XTM</span>
+                    <span className="text-xs font-bold opacity-80">{symbol}</span>
                   </>
                 )}
               </p>
-              <p className="mt-1 text-[11px] opacity-70">Available balance</p>
-              <button
-                onClick={() => store.requestLayer("L2")}
-                className="mt-3 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
-              >
-                <span className="flex items-center gap-2 text-xs font-bold">
-                  <SoonMascot size={18} /> Switch to L2
-                </span>
-                <span className="text-[10px] opacity-70">Ootle · testnet</span>
-              </button>
+              <p className="mt-1 flex items-center gap-2 text-[11px] opacity-70">
+                Available balance
+                {!isMainnet && (
+                  <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase">
+                    {networkLabel(store.network)} testnet
+                  </span>
+                )}
+              </p>
               {store.pendingMicro > 0n && (
                 <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-60" title="Change from a broadcast transaction — spendable once it is mined and scanned">
                   <Loader2 size={9} className="animate-spin" />
-                  {formatMicro(store.pendingMicro)} XTM confirming
+                  {formatMicro(store.pendingMicro)} {symbol} confirming
                 </p>
               )}
               {store.lockedMicro > 0n && (
@@ -270,18 +292,27 @@ export function Dashboard() {
                   }
                 >
                   <Lock size={9} />
-                  {formatMicro(store.lockedMicro)} XTM locked
+                  {formatMicro(store.lockedMicro)} {symbol} locked
                 </p>
               )}
               <button
-                onClick={() => openPanel("settings")}
+                onClick={() => store.requestLayer("L2")}
                 className="mt-3 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
               >
                 <span className="flex items-center gap-2 text-xs font-bold">
-                  <AlertCircle size={12} className="text-[var(--st-amber)]" />
-                  Secure your wallet
+                  <Layers size={14} /> Ootle (layer 2)
                 </span>
-                <span className="text-[10px] opacity-70">Backup · Steps ●○</span>
+                <span className="text-[10px] opacity-70">Esmeralda testnet</span>
+              </button>
+              <button
+                onClick={() => openPanel("settings")}
+                className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
+              >
+                <span className="flex items-center gap-2 text-xs font-bold">
+                  {store.hasPin ? <ShieldCheck size={14} /> : <AlertCircle size={14} className="text-[var(--st-amber)]" />}
+                  Security & recovery
+                </span>
+                <span className="text-[10px] opacity-70">{store.hasPin ? "PIN set" : "No PIN set"}</span>
               </button>
             </div>
 
@@ -291,7 +322,7 @@ export function Dashboard() {
                 onClick={() => openPanel("activity")}
                 className="flex items-center gap-1 text-sm font-bold text-[var(--tari-text)]"
               >
-                All Activity
+                Activity
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="m6 9 6 6 6-6" />
                 </svg>
@@ -309,6 +340,12 @@ export function Dashboard() {
                 >
                   Receive
                 </button>
+                <button
+                  onClick={() => openPanel("burn")}
+                  className="tx-pill px-4 py-1.5 text-xs font-bold text-[var(--tari-text)] hover:opacity-80"
+                >
+                  Burn
+                </button>
               </div>
             </div>
 
@@ -320,7 +357,7 @@ export function Dashboard() {
               {recent.length === 0 ? (
                 <div className="grid place-items-center py-6">
                   <span className="tx-pill px-5 py-2 text-xs font-bold text-[var(--tari-text)]">
-                    No transactions found
+                    No transactions yet
                   </span>
                 </div>
               ) : (
@@ -364,7 +401,7 @@ export function Dashboard() {
                       }
                     >
                       {BigInt(t.amountMicro) > 0n
-                        ? `${incoming ? "+" : ""}${formatMicro(BigInt(t.amountMicro))} XTM`
+                        ? `${incoming ? "+" : ""}${formatMicro(BigInt(t.amountMicro))} ${symbol}`
                         : "—"}
                     </span>
                   </button>
@@ -379,8 +416,8 @@ export function Dashboard() {
 
         {/* ── Main area over the tower ── */}
         <main className="relative order-2 hidden w-full min-w-0 shrink-0 md:order-3 md:block md:h-auto md:w-auto md:flex-1">
-          {/* Live block explorer bubbles — bottom center (Universe BlockExplorerMini) */}
-          {!isPhone && (
+          {/* The block ticker reads the MainNet explorer, so it is only shown there. */}
+          {!isPhone && isMainnet && (
             <div className="absolute inset-x-0 bottom-0 z-10 md:bottom-5">
               <BlockExplorerMini />
             </div>
@@ -389,8 +426,8 @@ export function Dashboard() {
         </main>
       </div>
 
-        {/* Soon's leap between layers. The switch commits on landing, so the wallet underneath
-          never changes while the animation is still in the air. */}
+      {/* The layer switch commits when the transition finishes, so the wallet underneath never
+          changes mid-transition. */}
       {store.pendingLayer && (
         <LayerJump to={store.pendingLayer} onDone={() => store.setLayer(store.pendingLayer!)} />
       )}
@@ -421,6 +458,8 @@ export function Dashboard() {
                 {panel === "l2receive" && <L2ReceivePanel />}
                 {panel === "subaddresses" && <SubAddressPanel />}
                 {panel === "dapps" && <DappStore />}
+                {panel === "burn" && <BurnPanel />}
+                {panel === "claimburn" && <ClaimBurnPanel />}
               </div>
             </Card>
           </div>

@@ -18,7 +18,36 @@ import type { SubmitOutcome } from "./tari";
  */
 export const DEFAULT_RPC_URL = "https://rpc.tari.com";
 
+/** Tari's public query service per network (`wallet_get_default_seed_https_address`). */
+const RPC_URLS: Record<string, string> = {
+  mainnet: DEFAULT_RPC_URL,
+  esmeralda: "https://rpc.esmeralda.tari.com",
+  nextnet: "https://rpc.nextnet.tari.com",
+  stagenet: "https://rpc.stagenet.tari.com",
+  igor: "https://rpc.igor.tari.com",
+};
+
 let rpcBase: string | null = DEFAULT_RPC_URL;
+let rpcNetwork = "mainnet";
+
+/**
+ * Points every query and broadcast at `network`'s node. The gRPC bridge is a MainNet deployment,
+ * so on any other network it is never used as a fallback: answering an Esmeralda wallet with
+ * MainNet data would be worse than failing.
+ */
+export function configureRpcForNetwork(network: string): void {
+  rpcNetwork = network;
+  rpcBase = RPC_URLS[network] ?? DEFAULT_RPC_URL;
+}
+
+export function getRpcNetwork(): string {
+  return rpcNetwork;
+}
+
+/** Whether the MainNet gRPC bridge may stand in for the query service. */
+export function bridgeAllowed(): boolean {
+  return rpcNetwork === "mainnet";
+}
 
 /** Overrides the query service, or disables it entirely (`null`) so everything falls to the bridge. */
 export function setRpcBase(url: string | null): void {
@@ -154,14 +183,14 @@ function metadataSigHex(ms: Record<string, unknown> | null | undefined): string 
  * endpoint itself works (curl and Node reach it fine — they do not enforce CORS, which is exactly
  * why this passed a command-line test and failed in the page).
  *
- * A same-origin path has no preflight at all, so a deployment that proxies `/rpc/json_rpc` to the
+ * A same-origin path has no preflight at all, so a deployment that proxies `/rpc/<network>/*` to the
  * node fixes it outright. The direct URL stays as the fallback for a host that does not, and for
  * any non-browser caller where it works unmodified.
  */
 function submitUrls(base: string): string[] {
   const urls: string[] = [];
   if (typeof window !== "undefined" && window.location?.origin?.startsWith("http")) {
-    urls.push(`${window.location.origin}/rpc/json_rpc`);
+    urls.push(`${window.location.origin}/rpc/${rpcNetwork}/json_rpc`);
   }
   urls.push(`${base}/json_rpc`);
   return urls;
@@ -473,4 +502,27 @@ export async function rpcSubmit(transactionJson: string): Promise<SubmitOutcome>
       ? reason.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()
       : "NONE";
   return { accepted, result: name, detail: body.slice(0, 500) };
+}
+
+/**
+ * The kernel merkle proof an Ootle burn claim needs, or null while the kernel is not yet in a
+ * block (the node answers 404 until it is). Looked up by the kernel's excess signature.
+ */
+export async function rpcKernelMerkleProof(
+  nonceHex: string,
+  signatureHex: string,
+  signal?: AbortSignal,
+): Promise<{ block_hash: string; encoded_merkle_proof: string; leaf_index: number; block_height: number | null } | null> {
+  const base = requireBase();
+  const q = new URLSearchParams({ excess_sig_public_nonce: nonceHex, excess_sig_signature: signatureHex });
+  const r = await fetch(`${base}/generate_kernel_merkle_proof?${q}`, { signal });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`rpc /generate_kernel_merkle_proof ${r.status}: ${(await r.text()).slice(0, 140)}`);
+  const j = (await r.json()) as Record<string, unknown>;
+  return {
+    block_hash: String(j.block_hash),
+    encoded_merkle_proof: String(j.encoded_merkle_proof),
+    leaf_index: Number(j.leaf_index),
+    block_height: j.block_height == null ? null : Number(j.block_height),
+  };
 }

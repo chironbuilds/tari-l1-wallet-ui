@@ -57,7 +57,7 @@ export function LockScreen() {
         </Field>
 
         {error && (
-          <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-red-300">
+          <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-[var(--st-red)]">
             <TriangleAlert size={16} className="mt-0.5 shrink-0" />
             <span className="break-words">{error}</span>
           </div>

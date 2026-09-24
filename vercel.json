@@ -7,5 +7,15 @@
       "includeFiles": "server/proto/**",
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/rpc/mainnet/:path*",
+      "destination": "https://rpc.tari.com/:path*"
+    },
+    {
+      "source": "/rpc/esmeralda/:path*",
+      "destination": "https://rpc.esmeralda.tari.com/:path*"
+    }
+  ]
 }

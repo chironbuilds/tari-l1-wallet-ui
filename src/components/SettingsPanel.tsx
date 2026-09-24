@@ -18,6 +18,8 @@ import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
 import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
+import { getRpcBase } from "../lib/rpc";
+import { networkLabel } from "../lib/tari";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { useToast } from "./toast";
 import { Badge, Button, Card, CopyButton, Field, Segmented, Switch, TextInput } from "./ui";
@@ -121,7 +123,7 @@ export function SettingsPanel() {
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Card className="h-fit p-6 sm:p-7">
-        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-white">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
             <ShieldCheck size={15} />
           </span>
@@ -267,7 +269,7 @@ export function SettingsPanel() {
                 <Download size={14} /> Download .txt
               </Button>
               <span className="self-center">
-                <Badge tone="amber">handle with care</Badge>
+                <Badge tone="amber">keep private</Badge>
               </span>
             </>
           )}
@@ -275,15 +277,16 @@ export function SettingsPanel() {
       </Card>
 
       <Card className="h-fit p-6 sm:p-7 lg:col-span-2">
-        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-white">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
             <Radar size={15} />
           </span>
-          Live chain scan
+          Chain scan
         </h3>
         <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Scans blocks for outputs owned by this wallet, reading them straight from a base node's
-          query service at <code className="text-zinc-400">rpc.tari.com</code>. Found outputs are
+          Scans blocks for outputs owned by this wallet, reading them from the{" "}
+          {networkLabel(store.network)} base node query service at{" "}
+          <code className="text-zinc-400">{(getRpcBase() ?? "").replace(/^https?:\/\//, "")}</code>. Found outputs are
           added automatically.
         </p>
 
@@ -353,7 +356,7 @@ export function SettingsPanel() {
             <p className="mt-2">
               blocks {store.scan.blocksScanned.toLocaleString()} · outputs seen{" "}
               {store.scan.outputsSeen.toLocaleString()} ·{" "}
-              <b className="text-[var(--st-green)]">{store.scan.found} owned ✓</b>
+              <b className="text-[var(--st-green)]">{store.scan.found} owned</b>
               {store.scan.skipped > 0 && (
                 <span className="text-[var(--st-amber)]"> · {store.scan.skipped} unavailable</span>
               )}
@@ -398,7 +401,7 @@ export function SettingsPanel() {
           closed a dApp has no other way to take one back — without this, revoking would mean
           reopening the site that holds the permission you are trying to remove. */}
       <Card className="p-6 sm:p-7 lg:col-span-2">
-        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-white">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600">
             <Globe size={15} />
           </span>
@@ -461,7 +464,7 @@ export function SettingsPanel() {
       </Card>
 
       <Card className="p-6 sm:p-7 lg:col-span-2">
-        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-white">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-red-600 to-orange-600">
             <Trash2 size={15} />
           </span>
@@ -484,16 +487,17 @@ export function SettingsPanel() {
           <Button
             variant="danger"
             onClick={() => {
-              if (confirm("Erase wallet + backup from this browser? This cannot be undone.")) {
+              if (confirm("Erase this wallet and its encrypted backup from this browser? This cannot be undone.")) {
                 store.forget();
               }
             }}
           >
-            <Trash2 size={15} /> Erase wallet completely
+            <Trash2 size={15} /> Erase wallet
           </Button>
         </div>
         <p className="mt-5 border-t border-[var(--tari-border)] pt-4 text-[11px] text-zinc-600">
-          Network <b className="text-zinc-400">{store.network}</b> is fixed for this wallet's keys — create a new one to switch networks.
+          Network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. A wallet stays on the network it was
+          created for; to use another network, erase this wallet and restore it there.
         </p>
       </Card>
     </div>

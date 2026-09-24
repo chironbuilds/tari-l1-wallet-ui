@@ -28,6 +28,8 @@ import { deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
+import { configureRpcForNetwork, rpcKernelMerkleProof } from "./lib/rpc";
+import { CLAIM_RETRY_MS, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -134,6 +136,8 @@ interface Persisted {
    * spans a reload.
    */
   spentHashes?: Record<string, string>;
+  /** Burns to Ootle, tracked from broadcast through to the claim. */
+  burns?: BurnRecord[];
 }
 
 function loadPersisted(): Persisted | null {
@@ -197,9 +201,9 @@ interface Store {
   setActiveSubAddress: (label: string | null) => void;
   layer: Layer;
   setLayer: (layer: Layer) => void;
-  /** The layer a switch is travelling to while Soon's jump plays, or null when settled. */
+  /** The layer a switch is moving to while its transition plays, or null when settled. */
   pendingLayer: Layer | null;
-  /** Starts a layer switch. The change itself commits when the animation lands. */
+  /** Starts a layer switch. The change itself commits when the transition finishes. */
   requestLayer: (layer: Layer) => void;
   l2: L2State;
   refreshL2: () => void;
@@ -244,6 +248,13 @@ interface Store {
   updateTx: (id: string, patch: Partial<TxRecord>) => void;
   clearHistory: () => void;
   setNodeUrl: (url: string) => void;
+  burns: BurnRecord[];
+  addBurn: (rec: BurnRecord) => void;
+  updateBurn: (id: string, patch: Partial<BurnRecord>) => void;
+  /** Claims a mined burn into this wallet's Ootle account now, rather than waiting for the retry. */
+  claimBurnNow: (id: string) => Promise<void>;
+  /** This wallet's Ootle account public key — the claim key its own burns are addressed to. */
+  ootleClaimPublicKey: () => Promise<string>;
 }
 
 const StoreCtx = createContext<Store | null>(null);
@@ -299,6 +310,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const subAddressesRef = useRef<SubAddress[]>([]);
   const [layer, setLayerState] = useState<Layer>("L1");
   const [pendingLayer, setPendingLayer] = useState<Layer | null>(null);
+  const [burns, setBurns] = useState<BurnRecord[]>([]);
   const [l2, setL2] = useState<L2State>({ identity: null, balances: [], loading: false, error: null });
   const stopRef = useRef(false);
   // `scan` keeps the *last* progress object after a scan finishes, so it can never stand in for
@@ -368,7 +380,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             spentHashRef.current.set(hash.toLowerCase(), commitment.toLowerCase());
           }
         }
-        if (p.network) setNetwork(p.network);
+        if (p.burns) setBurns(p.burns);
+        if (p.network) {
+          configureRpcForNetwork(p.network);
+          setNetwork(p.network);
+        }
         if (p.encBackup && p.network) {
           // A PIN has been set on this device: the seed only exists on disk encrypted, so the
           // wallet stays locked until unlock() supplies the PIN to decrypt it.
@@ -411,6 +427,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       birthdayMs,
       lastScannedHeight,
       spentHashes: Object.fromEntries(spentHashRef.current),
+      burns,
     };
     if (!backupHex && !encBackup) {
       localStorage.removeItem(STORAGE_KEY);
@@ -438,6 +455,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     scanThreads,
     birthdayMs,
     lastScannedHeight,
+    burns,
   ]);
 
   const setWalletBirthday = useCallback((ms: number) => {
@@ -446,6 +464,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const createWallet = useCallback(async (net: NetworkId, pin: string) => {
+    configureRpcForNetwork(net);
     const w = new WasmWallet(net);
     handles.current.clear();
     const hex = w.getBackupHex();
@@ -458,6 +477,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAddressInfo(describe(w.getAddress()));
     setUtxos([]);
     setHistory([]);
+    setBurns([]);
     setLayerState("L1");
     setPendingLayer(null);
     setL2({ identity: null, balances: [], loading: false, error: null });
@@ -473,6 +493,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async (hex: string, net: NetworkId, pin: string): Promise<string | null> => {
       let w: WasmWallet;
       const trimmed = hex.trim();
+      configureRpcForNetwork(net);
       try {
         w = WasmWallet.fromBackupHex(trimmed, net);
       } catch (e) {
@@ -488,6 +509,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setAddressInfo(describe(w.getAddress()));
       setUtxos([]);
       setHistory([]);
+      setBurns([]);
       // The cursor belongs to whichever wallet was here before; keeping it would skip straight
       // past this wallet's own history. Seed restores set a birthday right after this returns.
       setLastScannedHeight(null);
@@ -517,6 +539,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAddressInfo(null);
     setUtxos([]);
     setHistory([]);
+    setBurns([]);
   }, [wallet]);
 
   const lock = useCallback(() => {
@@ -708,6 +731,107 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const clearHistory = useCallback(() => setHistory([]), []);
 
+  const addBurn = useCallback((rec: BurnRecord) => {
+    setBurns((b) => [rec, ...b]);
+  }, []);
+
+  const updateBurn = useCallback((id: string, patch: Partial<BurnRecord>) => {
+    setBurns((b) => b.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  }, []);
+
+  const burnsRef = useRef<BurnRecord[]>([]);
+  burnsRef.current = burns;
+  const claimingRef = useRef(new Set<string>());
+
+  const ootleClaimPublicKey = useCallback(async (): Promise<string> => {
+    if (!backupHex) throw new Error("No wallet loaded.");
+    const identity = await deriveL2Identity(backupHex);
+    const key = await identity.account.getPublicKey();
+    return Array.from(key, (b) => b.toString(16).padStart(2, "0")).join("");
+  }, [backupHex]);
+
+  const claimBurn = useCallback(
+    async (id: string, manual: boolean) => {
+      const rec = burnsRef.current.find((r) => r.id === id);
+      if (!rec || !backupHex || claimingRef.current.has(id)) return;
+      const proof = claimProofFor(rec);
+      if (!proof) return;
+      claimingRef.current.add(id);
+      setBurns((b) =>
+        b.map((r) => (r.id === id ? { ...r, status: "claiming", lastError: undefined, lastAttemptAt: Date.now() } : r)),
+      );
+      try {
+        const identity = await deriveL2Identity(backupHex);
+        const { transactionId, claimedAmount } = await identity.account.claimBurn(proof);
+        setBurns((b) =>
+          b.map((r) =>
+            r.id === id
+              ? { ...r, status: "claimed", claimTxId: transactionId, claimedMicro: claimedAmount.toString() }
+              : r,
+          ),
+        );
+        refreshL2Ref.current();
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        // The burn stays claimable whatever went wrong, so it returns to waiting either way.
+        setBurns((b) => b.map((r) => (r.id === id ? { ...r, status: "mined", lastError: message } : r)));
+        if (manual) throw isRetryableClaimError(message) ? new Error(`Not claimable yet: ${message}`) : e;
+      } finally {
+        claimingRef.current.delete(id);
+      }
+    },
+    [backupHex],
+  );
+
+  const claimBurnNow = useCallback((id: string) => claimBurn(id, true), [claimBurn]);
+
+  /**
+   * Moves each burn along: a broadcast burn is mined once its kernel has a merkle proof, and a
+   * mined burn to this wallet's own account is claimed automatically, retried on a slow cadence
+   * because validators only accept it once the L1 block is well confirmed.
+   */
+  const advanceBurns = useCallback(async () => {
+    for (const rec of burnsRef.current) {
+      const needsProof = rec.status === "broadcast" || (rec.status === "external" && !rec.merkle);
+      if (needsProof) {
+        try {
+          const merkle = await rpcKernelMerkleProof(rec.parts.kernel.nonceHex, rec.parts.kernel.signatureHex);
+          if (merkle) {
+            const { block_height, ...proof } = merkle;
+            setBurns((b) =>
+              b.map((r) =>
+                r.id === rec.id
+                  ? {
+                      ...r,
+                      merkle: proof,
+                      minedHeight: block_height ?? undefined,
+                      status: r.status === "external" ? "external" : "mined",
+                      // Counts as an attempt so the first claim waits for the block to settle.
+                      lastAttemptAt: Date.now(),
+                    }
+                  : r,
+              ),
+            );
+          }
+        } catch {
+          /* node unreachable — try again on the next pass */
+        }
+      } else if (rec.status === "mined" && rec.toOwnAccount && Date.now() - (rec.lastAttemptAt ?? 0) >= CLAIM_RETRY_MS) {
+        void claimBurn(rec.id, false);
+      }
+    }
+  }, [claimBurn]);
+
+  const burnsInFlight = burns.some(
+    (r) => r.status === "broadcast" || (r.status === "mined" && r.toOwnAccount) || (r.status === "external" && !r.merkle),
+  );
+  useEffect(() => {
+    if (!ready || !wallet || walletLocked || !burnsInFlight) return;
+    void advanceBurns();
+    const id = setInterval(() => void advanceBurns(), 30_000);
+    return () => clearInterval(id);
+  }, [ready, wallet, walletLocked, burnsInFlight, advanceBurns]);
+
   const setNodeUrl = useCallback((url: string) => {
     setNodeUrlState(url.trim());
   }, []);
@@ -780,6 +904,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     })();
   }, [backupHex]);
+  const refreshL2Ref = useRef(refreshL2);
+  refreshL2Ref.current = refreshL2;
 
   /**
    * Shielded outputs are freestanding UTXO substates that no vault lists, so the only lead to
@@ -817,7 +943,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Lives here rather than in the Dashboard so any surface can ask for the switch — the L2 panel's
-  // own "back to L1" button gets the same jump as the card's "switch to L2".
+  // own "back to L1" button gets the same transition as the card's "switch to L2".
   const requestLayer = useCallback(
     (next: Layer) => {
       setPendingLayer((current) => (current === null && next !== layer ? next : current));
@@ -1185,6 +1311,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateTx,
     clearHistory,
     setNodeUrl,
+    burns,
+    addBurn,
+    updateBurn,
+    claimBurnNow,
+    ootleClaimPublicKey,
     setScannerUrl,
     startScan,
     stopScan,

@@ -3,7 +3,6 @@ import { useStore } from "../../store";
 import Hls from "hls.js";
 import NumberFlow from "@number-flow/react";
 import {
-  estimateActiveMiners,
   fetchBlockStats,
   fetchChainTip,
   formatBlockNumber,
@@ -272,11 +271,8 @@ function BlockProgress({ blocks, maxBlocks }: { blocks: number; maxBlocks: numbe
   );
 }
 
-function MinerCount({ height }: { height: number | null }) {
-  const value = height ? estimateActiveMiners(height) : 0;
-  const rounded = value >= 50_000 ? Math.floor(value / 1000) * 1000 : value;
-  const notation = value >= 50_000 ? "compact" : "standard";
-
+/** The chain tip, as reported by the explorer — nothing here is estimated. */
+function ChainHeight({ height }: { height: number | null }) {
   return (
     <div className="relative hidden w-full items-center justify-center md:flex">
       <span className="absolute left-0 h-px w-[38%] bg-black/10" />
@@ -284,8 +280,8 @@ function MinerCount({ height }: { height: number | null }) {
       <div className="flex select-none items-center gap-2">
         <span className="size-[11px] shrink-0 rounded-full bg-[#188750]" />
         <span className="text-base font-semibold tracking-[-0.8px] text-[var(--tari-text)]">
-          <NumberFlow value={rounded} format={{ maximumFractionDigits: 2, notation }} />{" "}
-          active miners
+          MainNet block{" "}
+          {height ? <NumberFlow value={height} format={{ useGrouping: true }} /> : "—"}
         </span>
       </div>
     </div>
@@ -455,7 +451,7 @@ export function BlockExplorerMini() {
       className="pointer-events-auto absolute right-0 bottom-0 z-0 flex w-full flex-col items-center gap-2 md:gap-4"
       style={{ padding: "0 0 10px 0" }}
     >
-      <MinerCount height={chainHeight > 0 ? chainHeight : null} />
+      <ChainHeight height={chainHeight > 0 ? chainHeight : null} />
       <div className="relative flex w-full items-center">
         <div className="z-10 flex shrink-0 items-center">
           {sticky?.isSolved ? (

@@ -92,7 +92,7 @@ function SchnorrLab() {
   const [verified, setVerified] = useState<boolean | null>(null);
 
   return (
-    <LabCard title="Ristretto schnorr" icon={<Lock size={14} />}>
+    <LabCard title="Ristretto Schnorr signatures" icon={<Lock size={14} />}>
       <Button
         variant="outline"
         className="w-full"
@@ -100,7 +100,7 @@ function SchnorrLab() {
           setKp(WasmKeyPair.generate());
           setSig(null);
           setVerified(null);
-          toast({ tone: "info", title: "Fresh keypair generated" });
+          toast({ tone: "info", title: "New keypair generated" });
         }}
       >
         Generate keypair
@@ -190,7 +190,7 @@ function CommitLab() {
             setCommitment(commitValue(blind.trim(), micro!));
             setOpens(null);
           } catch (e) {
-            toast({ tone: "error", title: "commit failed", message: String(e) });
+            toast({ tone: "error", title: "Commitment failed", message: String(e) });
           }
         }}
       >

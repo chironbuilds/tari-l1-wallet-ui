@@ -1,3 +1,5 @@
+import { getRpcNetwork, rpcTip } from "./rpc";
+
 const EXPLORER = "https://textexplore.tari.com";
 
 export interface BlockStats {
@@ -48,6 +50,15 @@ export function parseStats(block: BlockStats): BlockBubbleData {
 }
 
 export async function fetchChainTip(): Promise<ChainTip | null> {
+  // The explorer only indexes MainNet; every other network asks its own node.
+  if (getRpcNetwork() !== "mainnet") {
+    try {
+      const tip = await rpcTip();
+      return tip.height > 0 ? { height: tip.height, timestamp: tip.timestamp * 1000 } : null;
+    } catch {
+      return null;
+    }
+  }
   try {
     const r = await fetch(`${EXPLORER}/blocks/tip/height`);
     if (!r.ok) return null;
@@ -59,10 +70,6 @@ export async function fetchChainTip(): Promise<ChainTip | null> {
   } catch {
     return null;
   }
-}
-
-export function estimateActiveMiners(height: number): number {
-  return 12400 + ((height * 37) % 4200);
 }
 
 export const timeAgo = (timestamp: number): string => {

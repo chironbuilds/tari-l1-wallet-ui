@@ -77,12 +77,12 @@ export function ReceivePanel() {
         }}
       >
         {copied ? <Check size={16} className="text-[var(--st-green)]" /> : <Copy size={16} />}
-        {copied ? "Address copied!" : "Copy Address"}
+        {copied ? "Copied" : "Copy address"}
       </Button>
 
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <Badge tone={addr.isDual ? "green" : "red"}>
-          {addr.isDual ? "one-sided payments supported ✓" : "single address"}
+          {addr.isDual ? "One-sided payments supported" : "Single address"}
         </Badge>
         {addr.features.length > 0 && (
           <Badge tone="slate">{addr.features.map(humanizeFlag).join(" · ")}</Badge>
@@ -97,7 +97,7 @@ export function ReceivePanel() {
       <details className="mt-6 w-full">
         <summary className="flex cursor-pointer items-center justify-between text-sm font-bold tracking-wide text-[var(--tari-text)] uppercase select-none">
           <span className="flex items-center gap-2">
-            <Coins size={15} className="text-[var(--st-green)]" /> Advanced · import scanned output
+            <Coins size={15} className="text-[var(--st-green)]" /> Advanced: import a scanned output
           </span>
           <ChevronDown size={16} className="text-zinc-500" />
         </summary>

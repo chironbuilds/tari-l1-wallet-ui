@@ -9,7 +9,7 @@ import {
   Zap,
 } from "lucide-react";
 import { useStore, type TxRecord } from "../store";
-import { broadcastBaseUrl, submitViaMiddleware } from "../lib/tari";
+import { broadcastBaseUrl, coinSymbol, submitViaMiddleware } from "../lib/tari";
 import { copyText, downloadText, formatMicro, timeAgo, truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Badge, Button, Card, EmptyState } from "./ui";
@@ -33,6 +33,7 @@ const statusLabel: Record<TxRecord["status"], string> = {
 
 export function ActivityPanel() {
   const store = useStore();
+  const symbol = coinSymbol(store.network);
   const toast = useToast();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -95,7 +96,7 @@ export function ActivityPanel() {
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {timeAgo(t.createdAt)}
-                  {incoming ? "" : ` · fee ${formatMicro(BigInt(t.feeMicro))} T`}
+                  {incoming ? "" : ` · fee ${formatMicro(BigInt(t.feeMicro))} ${symbol}`}
                   {t.minedHeight ? ` · block #${t.minedHeight.toLocaleString()}` : ""}
                 </p>
                 {/* A one-sided payment is unlinkable to its sender on chain; an address only
@@ -118,7 +119,7 @@ export function ActivityPanel() {
                   }
                 >
                   {BigInt(t.amountMicro) > 0n
-                    ? `${incoming ? "+" : "-"}${formatMicro(BigInt(t.amountMicro))} T`
+                    ? `${incoming ? "+" : "-"}${formatMicro(BigInt(t.amountMicro))} ${symbol}`
                     : "—"}
                 </span>
                 <Badge tone={statusTone[t.status]}>{statusLabel[t.status]}</Badge>
@@ -159,12 +160,12 @@ function TxDetail({ rec }: { rec: TxRecord }) {
       </dl>
       {rec.changeMicro && BigInt(rec.changeMicro) > 0n && (
         <p className="text-xs text-[var(--st-violet)]">
-          change returned: <b>{formatMicro(BigInt(rec.changeMicro))} T</b> · tracked locally as a new UTXO
+          Change returned: <b>{formatMicro(BigInt(rec.changeMicro))} {coinSymbol(store.network)}</b>
         </p>
       )}
       {rec.result && (
         <p className="max-h-20 overflow-y-auto rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3 font-mono text-[11px] break-all whitespace-pre-wrap text-zinc-400">
-          node response: {rec.result}
+          Node response: {rec.result}
         </p>
       )}
       <pre className="max-h-52 overflow-auto rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-zinc-400">

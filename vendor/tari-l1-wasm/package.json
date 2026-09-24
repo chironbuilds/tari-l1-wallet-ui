@@ -5,7 +5,7 @@
     "The Tari Development Community"
   ],
   "description": "WebAssembly bindings for Tari L1 core primitives: addresses, amounts, fees and crypto",
-  "version": "5.6.0-pre.6",
+  "version": "5.6.0-pre.7",
   "license": "BSD-3-Clause",
   "repository": {
     "type": "git",

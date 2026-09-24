@@ -2,7 +2,7 @@ import {
   WasmTariAddress,
   calculateFee,
 } from "@chironbuilder/tari-l1-wasm";
-import { getRpcBase, rpcSubmit } from "./rpc";
+import { bridgeAllowed, getRpcBase, rpcSubmit } from "./rpc";
 
 export const NETWORKS = [
   { id: "esmeralda", label: "Esmeralda", testnet: true },
@@ -135,8 +135,9 @@ export async function submitViaMiddleware(
   if (getRpcBase()) {
     try {
       return await rpcSubmit(transactionJson);
-    } catch {
-      /* unreachable or malformed response — try the bridge */
+    } catch (e) {
+      // Unreachable or malformed response — the bridge can stand in, but only on MainNet.
+      if (!bridgeAllowed()) throw e;
     }
   }
   return submitViaBridge(scannerUrl, transactionJson);
@@ -163,4 +164,13 @@ async function submitViaBridge(
     result: parsed?.result ?? (res.ok ? "NONE" : `HTTP ${res.status}`),
     detail: body.slice(0, 500),
   };
+}
+
+/** The L1 coin's ticker on `network`: test coins are tXTM so they are never mistaken for XTM. */
+export function coinSymbol(network: NetworkId | null): string {
+  return network === null || network === "mainnet" ? "XTM" : "tXTM";
+}
+
+export function networkLabel(network: NetworkId | null): string {
+  return NETWORKS.find((n) => n.id === network)?.label ?? "MainNet";
 }

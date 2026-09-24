@@ -113,7 +113,7 @@ export function DappStore() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#9d6bff] to-[#6d28d9]">
             <Grid3x3 size={15} />
           </span>
-          dApp store
+          Ootle apps
         </h2>
         <Segmented<Tab>
           value={tab}

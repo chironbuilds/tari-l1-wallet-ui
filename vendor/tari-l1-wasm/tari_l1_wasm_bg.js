@@ -1,4 +1,83 @@
 /**
+ * Builds and signs a burn of `amount` µT, claimable on Ootle by the holder of `claim_public_key`.
+ *
+ * # Example (JS)
+ * ```js
+ * const builder = new WasmBurnBuilder(wallet, 10_000_000n, ootleAccountPublicKeyHex);
+ * builder.addInput(utxo);
+ * builder.withFeePerGram(5n);
+ * builder.withTipHeight(tip);
+ * const burn = builder.build();
+ * submit(burn.toJson());
+ * ```
+ */
+export class WasmBurnBuilder {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmBurnBuilderFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmburnbuilder_free(ptr, 0);
+    }
+    /**
+     * Adds a spendable output (from this wallet) as a full input.
+     * @param {WasmWalletOutput} input
+     */
+    addInput(input) {
+        _assertClass(input, WasmWalletOutput);
+        wasm.wasmburnbuilder_addInput(this.__wbg_ptr, input.__wbg_ptr);
+    }
+    /**
+     * Produces the fully-signed burn transaction and its partial claim proof.
+     * @returns {WasmSignedBurn}
+     */
+    build() {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.wasmburnbuilder_build(ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmSignedBurn.__wrap(ret[0]);
+    }
+    /**
+     * `claim_public_key_hex` is the Ootle account's 32-byte public key (`P`). A wrong key burns
+     * the funds for good: nothing else can ever claim them.
+     * @param {WasmWallet} wallet
+     * @param {bigint} amount_micro
+     * @param {string} claim_public_key_hex
+     */
+    constructor(wallet, amount_micro, claim_public_key_hex) {
+        _assertClass(wallet, WasmWallet);
+        const ptr0 = passStringToWasm0(claim_public_key_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmburnbuilder_new(wallet.__wbg_ptr, amount_micro, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        WasmBurnBuilderFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @param {bigint} fee_per_gram_micro
+     */
+    withFeePerGram(fee_per_gram_micro) {
+        wasm.wasmburnbuilder_withFeePerGram(this.__wbg_ptr, fee_per_gram_micro);
+    }
+    /**
+     * Sets the current chain tip so the correct consensus-constants epoch is used.
+     * @param {bigint} tip_height
+     */
+    withTipHeight(tip_height) {
+        wasm.wasmburnbuilder_withTipHeight(this.__wbg_ptr, tip_height);
+    }
+}
+if (Symbol.dispose) WasmBurnBuilder.prototype[Symbol.dispose] = WasmBurnBuilder.prototype.free;
+
+/**
  * A Ristretto Schnorr keypair (secret + public key).
  */
 export class WasmKeyPair {
@@ -164,6 +243,259 @@ export class WasmSchnorrSignature {
     }
 }
 if (Symbol.dispose) WasmSchnorrSignature.prototype[Symbol.dispose] = WasmSchnorrSignature.prototype.free;
+
+/**
+ * A signed burn plus the claim-proof material an Ootle `ClaimBurn` needs.
+ */
+export class WasmSignedBurn {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmSignedBurn.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmSignedBurnFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmSignedBurnFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmsignedburn_free(ptr, 0);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get amountMicro() {
+        const ret = wasm.wasmsignedburn_amountMicro(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @returns {string | undefined}
+     */
+    get changeCommitmentHex() {
+        const ret = wasm.wasmsignedburn_changeCommitmentHex(this.__wbg_ptr);
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v1;
+    }
+    /**
+     * @returns {bigint | undefined}
+     */
+    get changeValueMicro() {
+        const ret = wasm.wasmsignedburn_changeValueMicro(this.__wbg_ptr);
+        return ret[0] === 0 ? undefined : BigInt.asUintN(64, ret[1]);
+    }
+    /**
+     * The Ootle account key `P` the burn is addressed to (the proof's `burn_public_key`).
+     * @returns {string}
+     */
+    get claimPublicKeyHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_claimPublicKeyHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get commitmentHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_commitmentHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get encryptedDataHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_encryptedDataHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Absolute fee in micro-Minotari.
+     * @returns {bigint}
+     */
+    get feeMicro() {
+        const ret = wasm.wasmsignedburn_feeMicro(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @returns {string}
+     */
+    get kernelExcessHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_kernelExcessHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {bigint}
+     */
+    get kernelFeeMicro() {
+        const ret = wasm.wasmsignedburn_kernelFeeMicro(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * @returns {bigint}
+     */
+    get kernelLockHeight() {
+        const ret = wasm.wasmsignedburn_kernelLockHeight(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
+    /**
+     * The burn kernel's excess-signature public nonce — half of the merkle-proof lookup key.
+     * @returns {string}
+     */
+    get kernelNonceHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_kernelNonceHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * The burn kernel's excess-signature scalar — the other half of the merkle-proof lookup key.
+     * @returns {string}
+     */
+    get kernelSignatureHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_kernelSignatureHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {number}
+     */
+    get kernelVersion() {
+        const ret = wasm.wasmsignedburn_kernelVersion(this.__wbg_ptr);
+        return ret;
+    }
+    /**
+     * @returns {string}
+     */
+    get outputHashHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_outputHashHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get ownershipNonceHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_ownershipNonceHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get ownershipSignatureHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_ownershipSignatureHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * @returns {string}
+     */
+    get senderOffsetPublicKeyHex() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.wasmsignedburn_senderOffsetPublicKeyHex(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
+     * Serde JSON representation of the transaction, for `submit_transaction`.
+     * @returns {string}
+     */
+    toJson() {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmsignedburn_toJson(this.__wbg_ptr);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) WasmSignedBurn.prototype[Symbol.dispose] = WasmSignedBurn.prototype.free;
 
 /**
  * A fully-signed transaction ready for submission to a base node.
@@ -824,6 +1156,35 @@ export class WasmWallet {
         return WasmWalletOutput.__wrap(ret[0]);
     }
     /**
+     * Answers only "is this one mine", and builds nothing.
+     *
+     * A chain scan asks this of every output that has ever existed, and the answer is no for all
+     * but a handful. Routing that through `importScannedOutput` makes each miss pay for a hex
+     * parse of the script, metadata signature, covenant and coinbase extra, the construction of
+     * an `OutputFeatures`, and a thrown JS exception to report the miss — none of which the
+     * answer depends on. Ownership is settled by the commitment, the encrypted data and the
+     * sender offset key alone, so those are all this takes, and it returns a plain bool.
+     *
+     * The caller re-fetches and imports the winners properly; this is a filter, not an import.
+     * @param {string} commitment_hex
+     * @param {string} encrypted_data_hex
+     * @param {string} sender_offset_pub_hex
+     * @returns {boolean}
+     */
+    isOutputMine(commitment_hex, encrypted_data_hex, sender_offset_pub_hex) {
+        const ptr0 = passStringToWasm0(commitment_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(encrypted_data_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passStringToWasm0(sender_offset_pub_hex, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmwallet_isOutputMine(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] !== 0;
+    }
+    /**
      * @param {string} network
      */
     constructor(network) {
@@ -1225,12 +1586,18 @@ export function __wbindgen_init_externref_table() {
     table.set(offset + 2, true);
     table.set(offset + 3, false);
 }
+const WasmBurnBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmburnbuilder_free(ptr, 1));
 const WasmKeyPairFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmkeypair_free(ptr, 1));
 const WasmSchnorrSignatureFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmschnorrsignature_free(ptr, 1));
+const WasmSignedBurnFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmsignedburn_free(ptr, 1));
 const WasmSignedTransactionFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmsignedtransaction_free(ptr, 1));

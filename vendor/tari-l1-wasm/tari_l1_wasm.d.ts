@@ -2,6 +2,42 @@
 /* eslint-disable */
 
 /**
+ * Builds and signs a burn of `amount` µT, claimable on Ootle by the holder of `claim_public_key`.
+ *
+ * # Example (JS)
+ * ```js
+ * const builder = new WasmBurnBuilder(wallet, 10_000_000n, ootleAccountPublicKeyHex);
+ * builder.addInput(utxo);
+ * builder.withFeePerGram(5n);
+ * builder.withTipHeight(tip);
+ * const burn = builder.build();
+ * submit(burn.toJson());
+ * ```
+ */
+export class WasmBurnBuilder {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Adds a spendable output (from this wallet) as a full input.
+     */
+    addInput(input: WasmWalletOutput): void;
+    /**
+     * Produces the fully-signed burn transaction and its partial claim proof.
+     */
+    build(): WasmSignedBurn;
+    /**
+     * `claim_public_key_hex` is the Ootle account's 32-byte public key (`P`). A wrong key burns
+     * the funds for good: nothing else can ever claim them.
+     */
+    constructor(wallet: WasmWallet, amount_micro: bigint, claim_public_key_hex: string);
+    withFeePerGram(fee_per_gram_micro: bigint): void;
+    /**
+     * Sets the current chain tip so the correct consensus-constants epoch is used.
+     */
+    withTipHeight(tip_height: bigint): void;
+}
+
+/**
  * A Ristretto Schnorr keypair (secret + public key).
  */
 export class WasmKeyPair {
@@ -34,6 +70,48 @@ export class WasmSchnorrSignature {
     static verify(public_key_hex: string, public_nonce_hex: string, signature_hex: string, message: Uint8Array): boolean;
     readonly publicNonceHex: string;
     readonly signatureHex: string;
+}
+
+/**
+ * A signed burn plus the claim-proof material an Ootle `ClaimBurn` needs.
+ */
+export class WasmSignedBurn {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Serde JSON representation of the transaction, for `submit_transaction`.
+     */
+    toJson(): string;
+    readonly amountMicro: bigint;
+    readonly changeCommitmentHex: string | undefined;
+    readonly changeValueMicro: bigint | undefined;
+    /**
+     * The Ootle account key `P` the burn is addressed to (the proof's `burn_public_key`).
+     */
+    readonly claimPublicKeyHex: string;
+    readonly commitmentHex: string;
+    readonly encryptedDataHex: string;
+    /**
+     * Absolute fee in micro-Minotari.
+     */
+    readonly feeMicro: bigint;
+    readonly kernelExcessHex: string;
+    readonly kernelFeeMicro: bigint;
+    readonly kernelLockHeight: bigint;
+    /**
+     * The burn kernel's excess-signature public nonce — half of the merkle-proof lookup key.
+     */
+    readonly kernelNonceHex: string;
+    /**
+     * The burn kernel's excess-signature scalar — the other half of the merkle-proof lookup key.
+     */
+    readonly kernelSignatureHex: string;
+    readonly kernelVersion: number;
+    readonly outputHashHex: string;
+    readonly ownershipNonceHex: string;
+    readonly ownershipSignatureHex: string;
+    readonly senderOffsetPublicKeyHex: string;
 }
 
 /**
@@ -211,6 +289,19 @@ export class WasmWallet {
      * against the commitment, and the resulting UTXO becomes spendable by `WasmTxBuilder`.
      */
     importScannedOutput(commitment_hex: string, encrypted_data_hex: string, sender_offset_pub_hex: string, script_hex: string, metadata_sig_hex: string, minimum_value_promise_micro: bigint, maturity: bigint, output_type_byte: number, range_proof_type_byte: number, coinbase_extra_hex: string, covenant_hex: string, range_proof_hex: string, output_hash_hex: string): WasmWalletOutput;
+    /**
+     * Answers only "is this one mine", and builds nothing.
+     *
+     * A chain scan asks this of every output that has ever existed, and the answer is no for all
+     * but a handful. Routing that through `importScannedOutput` makes each miss pay for a hex
+     * parse of the script, metadata signature, covenant and coinbase extra, the construction of
+     * an `OutputFeatures`, and a thrown JS exception to report the miss — none of which the
+     * answer depends on. Ownership is settled by the commitment, the encrypted data and the
+     * sender offset key alone, so those are all this takes, and it returns a plain bool.
+     *
+     * The caller re-fetches and imports the winners properly; this is a filter, not an import.
+     */
+    isOutputMine(commitment_hex: string, encrypted_data_hex: string, sender_offset_pub_hex: string): boolean;
     constructor(network: string);
     /**
      * Debug: build marker to verify the served wasm is current.

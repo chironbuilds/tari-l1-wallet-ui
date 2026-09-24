@@ -239,8 +239,8 @@ export function SendPanel() {
             recipient.trim()
               ? parsed
                 ? addressValid
-                  ? "Valid one-sided address ✓"
-                  : "Single address detected — one-sided payments need a dual address"
+                  ? "Valid one-sided address"
+                  : "This is a single address. One-sided payments need a dual address."
                 : "Invalid Tari address"
               : "Base58 or hex"
           }
@@ -361,7 +361,7 @@ export function SendPanel() {
       {result && (
         <div className="mt-5 rounded-2xl border border-[#06C983]/25 bg-[#06C983]/10 p-5">
           <p className="flex items-center gap-2 text-sm font-bold text-[var(--st-green)]">
-            <Check size={16} /> Transaction signed — Bulletproofs+ verified
+            <Check size={16} /> Transaction signed
           </p>
           <dl className="mt-3 space-y-2 rounded-xl bg-[var(--tari-bg-input)] p-4 text-sm">
             <Row label="Fee">

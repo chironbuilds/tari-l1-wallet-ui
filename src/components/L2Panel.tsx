@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { ChevronLeft, Droplets, Grid3x3, Loader2, Lock, RefreshCw, Search, TriangleAlert } from "lucide-react";
+import { ChevronLeft, Droplets, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { formatResourceAmount, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
+import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
 import { Button, CopyButton, EmptyState } from "./ui";
-import { SoonMascot } from "./SoonMascot";
 
 /**
  * The Ootle (L2) view, laid out to mirror the L1 wallet column: balance card on top, holdings
@@ -19,7 +19,7 @@ export function L2Panel({
   onOpenPanel,
 }: {
   /** Opens one of the Dashboard's floating panels — the same host the L1 send/receive use. */
-  onOpenPanel: (panel: "l2send" | "l2receive" | "dapps") => void;
+  onOpenPanel: (panel: "l2send" | "l2receive" | "dapps" | "claimburn") => void;
 }) {
   const store = useStore();
   const toast = useToast();
@@ -76,7 +76,7 @@ export function L2Panel({
               className="grid size-6 place-items-center rounded-full"
               style={{ background: "rgba(255,255,255,.14)" }}
             >
-              <SoonMascot size={16} />
+              <Layers size={13} />
             </span>
             <span className="text-sm font-bold">Ootle L2</span>
             <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase opacity-90">
@@ -96,7 +96,7 @@ export function L2Panel({
           {loading && balances.length === 0 ? (
             <span className="inline-flex items-center gap-2 text-base font-bold opacity-80">
               <Loader2 size={16} className="animate-spin" />
-              Reading vaults…
+              Loading…
             </span>
           ) : (
             <>
@@ -124,7 +124,7 @@ export function L2Panel({
           <span className="flex items-center gap-2 text-xs font-bold">
             <ChevronLeft size={14} /> Back to Tari L1
           </span>
-          <span className="text-[10px] opacity-70">MainNet</span>
+          <span className="text-[10px] opacity-70">{networkLabel(store.network)}</span>
         </button>
 
         <button
@@ -149,6 +149,17 @@ export function L2Panel({
             {claiming ? "Claiming…" : "Claim test XTR"}
           </span>
           <span className="text-[10px] opacity-70">faucet</span>
+        </button>
+
+        <button
+          onClick={() => onOpenPanel("claimburn")}
+          disabled={!identity}
+          className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+        >
+          <span className="flex items-center gap-2 text-xs font-bold">
+            <FileInput size={14} /> Claim an L1 burn
+          </span>
+          <span className="text-[10px] opacity-70">from proof</span>
         </button>
       </div>
 
@@ -176,8 +187,8 @@ export function L2Panel({
           <Button size="sm" variant="outline" className="shrink-0" disabled={!identity} onClick={() => onOpenPanel("l2receive")}>
             Receive
           </Button>
-          <Button size="sm" variant="outline" className="shrink-0 !px-2.5" onClick={() => onOpenPanel("dapps")} title="dApp store">
-            <Grid3x3 size={12} /> dApps
+          <Button size="sm" variant="outline" className="shrink-0 !px-2.5" onClick={() => onOpenPanel("dapps")} title="Ootle apps">
+            <Grid3x3 size={12} /> Apps
           </Button>
         </div>
       </div>
@@ -191,12 +202,12 @@ export function L2Panel({
           </div>
         </div>
       ) : loading && balances.length === 0 ? (
-        <p className="py-6 text-center text-xs text-zinc-500">Reading your Ootle vaults…</p>
+        <p className="py-6 text-center text-xs text-zinc-500">Loading balances…</p>
       ) : balances.length === 0 ? (
         <EmptyState
-          icon={<SoonMascot size={30} />}
-          title="Nothing here yet"
-          sub="No vaults on Ootle for this account. Claim some test XTR above to get started."
+          icon={<Wallet size={20} />}
+          title="No balances"
+          sub="This account holds no Ootle funds yet. Claim test XTR from the faucet, or burn tXTM from layer 1."
         />
       ) : (
         <div className="space-y-2.5">

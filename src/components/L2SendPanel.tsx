@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
-import { Check, Eye, EyeOff, Send } from "lucide-react";
+import { Check, Eye, EyeOff, Send, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { parseOotleAddress } from "@tari-project/ootle-wasm";
 import { OOTLE_NETWORK, formatResourceAmount, toOotleNetwork, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Button, Field, TextInput } from "./ui";
-import { SoonMascot } from "./SoonMascot";
 
 type Mode = "send" | "sendPrivately" | "shield" | "unshield";
 
@@ -95,7 +94,7 @@ export function L2SendPanel() {
       if (parsed.network !== toOotleNetwork(OOTLE_NETWORK)) {
         return { valid: false, message: "That address belongs to a different Ootle network." };
       }
-      return { valid: true, message: "Valid Ootle address ✓" };
+      return { valid: true, message: "Valid Ootle address" };
     } catch {
       return { valid: false, message: "Not a valid Ootle address — check it for a typo." };
     }
@@ -229,8 +228,8 @@ export function L2SendPanel() {
 
       {usable.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <SoonMascot size={44} />
-          <p className="text-sm font-bold text-[var(--tari-text)]">Nothing to move yet</p>
+          <Wallet size={28} className="text-zinc-500" />
+          <p className="text-sm font-bold text-[var(--tari-text)]">No funds available</p>
           <p className="max-w-[42ch] text-xs text-zinc-500">
             This account holds no Ootle funds. Claim some test XTR from the Ootle card first.
           </p>

@@ -2,6 +2,7 @@ import type { WasmWallet, WasmWalletOutput } from "@chironbuilder/tari-l1-wasm";
 import type { DetectPool } from "./detect-pool";
 import type { DetectFailure, DetectHit, DetectItem } from "./scan-worker";
 import {
+  bridgeAllowed,
   getRpcBase,
   rpcBlockBatch,
   rpcFullOutputs,
@@ -29,7 +30,7 @@ async function withBridgeFallback<T>(
   try {
     return await viaRpc();
   } catch (e) {
-    if (signal?.aborted) throw e;
+    if (signal?.aborted || !bridgeAllowed()) throw e;
     return viaBridge();
   }
 }
@@ -582,6 +583,7 @@ export async function findHeightForTimestamp(
     } catch {
       /* fall through to the search */
     }
+    if (!bridgeAllowed()) return null;
   }
   try {
     let lo = 1;

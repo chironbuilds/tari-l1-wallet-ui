@@ -213,6 +213,12 @@ textarea:focus-visible {
     border-radius: 12px;
   }
 }
+/* Phones get the essentials only; the rest stay reachable from the panels and settings. */
+@media (max-width: 767px) {
+  .un-rail-btn.rail-secondary {
+    display: none;
+  }
+}
 .un-rail-btn:hover {
   color: var(--tari-text);
   background: rgba(0, 0, 0, 0.06);
@@ -338,4 +344,101 @@ textarea:focus-visible {
 }
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Burn confirmation (BurnAnimation.tsx). */
+.burn-ember {
+  offset-rotate: 0deg;
+  opacity: 0;
+  background: #f59e0b;
+  box-shadow: 0 0 6px 1px rgba(245, 158, 11, 0.55);
+  animation-name: burn-ember;
+  animation-timing-function: cubic-bezier(0.45, 0, 0.25, 1);
+  animation-fill-mode: both;
+}
+@keyframes burn-ember {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+    background: #f59e0b;
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    background: #f97316;
+  }
+  90% {
+    opacity: 0.9;
+    background: var(--tari-purple);
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--tari-purple) 55%, transparent);
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+    background: var(--tari-purple);
+  }
+}
+.burn-coin {
+  animation-name: burn-coin;
+  animation-timing-function: ease-in;
+  animation-fill-mode: both;
+}
+@keyframes burn-coin {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.04);
+  }
+  75% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+.burn-coin-glow {
+  box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  animation: burn-glow 1.3s ease-out 0.1s 2;
+}
+@keyframes burn-glow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(245, 158, 11, 0);
+  }
+}
+.burn-ring {
+  animation-name: burn-ring;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+@keyframes burn-ring {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.burn-check {
+  opacity: 0;
+  animation: pop 0.3s ease-out both;
+}
+
+.layer-progress {
+  transform-origin: left;
+  animation-name: layer-progress;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  animation-fill-mode: both;
+}
+@keyframes layer-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }

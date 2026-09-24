@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { KeyRound, Lock, ShieldCheck, Sparkles, TriangleAlert } from "lucide-react";
+import { KeyRound, Lock, Plus, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useStore } from "../store";
 import { isPlausibleSeedPhrase, seedPhraseToWallet } from "../lib/cipherseed";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { Button, Card, Field, Logo, Segmented, TextInput } from "./ui";
 import { useToast } from "./toast";
+import type { NetworkId } from "../lib/tari";
 
 type ImportMode = "create" | "seed" | "backup";
 
@@ -12,6 +13,7 @@ export function Welcome() {
   const { createWallet, restoreWallet, setWalletBirthday } = useStore();
   const toast = useToast();
   const [mode, setMode] = useState<ImportMode>("create");
+  const [network, setNetwork] = useState<NetworkId>("mainnet");
   const [backup, setBackup] = useState("");
   const [seedInput, setSeedInput] = useState("");
   const [pin, setPin] = useState("");
@@ -37,7 +39,7 @@ export function Welcome() {
     await new Promise((r) => setTimeout(r, 400));
     try {
       if (mode === "create") {
-        await createWallet("mainnet", pin);
+        await createWallet(network, pin);
         toast({
           tone: "success",
           title: "Wallet created",
@@ -50,7 +52,7 @@ export function Welcome() {
           return;
         }
         const { backupHex, birthdayMs } = await seedPhraseToWallet(seedInput);
-        const err = await restoreWallet(backupHex, "mainnet", pin);
+        const err = await restoreWallet(backupHex, network, pin);
         if (err) {
           setError(err);
           setBusy(false);
@@ -59,8 +61,8 @@ export function Welcome() {
         setWalletBirthday(birthdayMs);
         toast({
           tone: "success",
-          title: "Wallet restored — scanning for your funds",
-          message: `Auto-scanning mainnet from your wallet's birthday (your wallet's birthday). Track progress in Settings → Live chain scan.`,
+          title: "Wallet restored",
+          message: "Scanning the chain from the wallet's creation date. Progress is shown in Settings → Chain scan.",
         });
       } else {
         if (!backup.trim()) {
@@ -68,7 +70,7 @@ export function Welcome() {
           setBusy(false);
           return;
         }
-        const err = await restoreWallet(backup, "mainnet", pin);
+        const err = await restoreWallet(backup, network, pin);
         if (err) {
           setError(err);
           setBusy(false);
@@ -101,7 +103,8 @@ export function Welcome() {
             Tari L1 Wallet
           </h1>
           <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
-            Self-custodial Minotari · keys & Bulletproofs+ forged in your browser via WASM.
+            Self-custodial Minotari wallet. Keys are generated and transactions are signed locally in your
+            browser.
           </p>
         </div>
 
@@ -114,7 +117,7 @@ export function Welcome() {
               value: "create",
               label: (
                 <span className="flex items-center justify-center gap-1.5">
-                  <Sparkles size={13} /> Create
+                  <Plus size={13} /> Create
                 </span>
               ),
             },
@@ -144,8 +147,8 @@ export function Welcome() {
               hint={
                 seedInput.trim()
                   ? seedPlausible
-                    ? "Looks like a valid Tari phrase ✓ — enter your passphrase if you used one"
-                    : "Not a valid 24-word Tari recovery phrase (yet)"
+                    ? "Valid Tari recovery phrase"
+                    : "Not a valid 24-word Tari recovery phrase"
                   : "Words separated by spaces · any of Tari's 7 languages"
               }
             >
@@ -176,11 +179,23 @@ export function Welcome() {
           </div>
         )}
 
-        <Field label="Network">
-          <div className="rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2.5 dark:border-white/10 dark:bg-white/[0.03]">
-            <span className="block text-xs font-semibold text-[var(--tari-text)]">MainNet</span>
-            <span className="text-[10px] text-[#7CD9A7]">layer 1 · minotari</span>
-          </div>
+        <Field
+          label="Network"
+          hint={
+            network === "mainnet"
+              ? "Real XTM."
+              : "Test network with valueless tXTM. Required for burning to Ootle."
+          }
+        >
+          <Segmented
+            value={network}
+            onChange={(v) => setNetwork(v as NetworkId)}
+            className="flex w-full"
+            options={[
+              { value: "mainnet", label: "MainNet" },
+              { value: "esmeralda", label: "Esmeralda testnet" },
+            ]}
+          />
         </Field>
 
         <div className="animate-fade-up mt-5 grid grid-cols-2 gap-3">
@@ -210,7 +225,7 @@ export function Welcome() {
         </p>
 
         {error && (
-          <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-red-300">
+          <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-[var(--st-red)]">
             <TriangleAlert size={16} className="mt-0.5 shrink-0" />
             <span className="break-words">{error}</span>
           </div>
@@ -226,9 +241,6 @@ export function Welcome() {
                   : "Restore from backup hex"}
           </Button>
 
-        <p className="mt-5 text-center text-[11px] leading-relaxed text-zinc-600">
-          No mining · no airdrops · no bridges — just pure L1 payments.
-        </p>
       </Card>
     </div>
   );
