@@ -23,7 +23,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { isLocked, useStore } from "../store";
 import { formatMicro, timeAgo, truncMiddle } from "../lib/format";
-import { Button, Card, CopyButton, Logo } from "./ui";
+import { ActionTiles, Button, Card, CopyButton, Logo } from "./ui";
 import { TowerBackground } from "./TowerBackground";
 import { BlockExplorerMini } from "./blocks/BlockExplorerMini";
 import { SendPanel } from "./SendPanel";
@@ -316,37 +316,25 @@ export function Dashboard() {
               </button>
             </div>
 
-            {/* Activity header + quick actions */}
-            <div className="flex items-center justify-between px-1">
+            <ActionTiles
+              actions={[
+                { label: "Send", icon: <ArrowUpRight size={16} />, onClick: () => openPanel("send") },
+                { label: "Receive", icon: <ArrowDownLeft size={16} />, onClick: () => openPanel("receive") },
+                { label: "Burn", icon: <Flame size={16} />, onClick: () => openPanel("burn") },
+              ]}
+            />
+
+            <div className="flex items-center justify-between px-1 pt-1">
+              <span className="text-sm font-bold text-[var(--tari-text)]">Activity</span>
               <button
                 onClick={() => openPanel("activity")}
-                className="flex items-center gap-1 text-sm font-bold text-[var(--tari-text)]"
+                className="flex items-center gap-0.5 text-xs font-semibold text-zinc-500 hover:text-[var(--tari-text)]"
               >
-                Activity
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="m6 9 6 6 6-6" />
+                View all
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6" />
                 </svg>
               </button>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => openPanel("send")}
-                  className="tx-pill px-4 py-1.5 text-xs font-bold text-[var(--tari-text)] hover:opacity-80"
-                >
-                  Send
-                </button>
-                <button
-                  onClick={() => openPanel("receive")}
-                  className="tx-pill px-4 py-1.5 text-xs font-bold text-[var(--tari-text)] hover:opacity-80"
-                >
-                  Receive
-                </button>
-                <button
-                  onClick={() => openPanel("burn")}
-                  className="tx-pill px-4 py-1.5 text-xs font-bold text-[var(--tari-text)] hover:opacity-80"
-                >
-                  Burn
-                </button>
-              </div>
             </div>
 
             {/* Transaction list */}

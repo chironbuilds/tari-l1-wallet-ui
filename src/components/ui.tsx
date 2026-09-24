@@ -360,3 +360,31 @@ export function Logo({ size = 64 }: { size?: number }) {
     </svg>
   );
 }
+
+export interface ActionTile {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}
+
+/** The wallet column's primary actions: equal-width tiles, so the row never runs past the column. */
+export function ActionTiles({ actions }: { actions: ActionTile[] }) {
+  return (
+    <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }}>
+      {actions.map((a) => (
+        <button
+          key={a.label}
+          onClick={a.onClick}
+          disabled={a.disabled}
+          title={a.title}
+          className="flex flex-col items-center justify-center gap-1 rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-deep)] py-2.5 text-xs font-semibold text-[var(--tari-text)] shadow-[var(--tari-shadow)] transition-colors hover:bg-[color-mix(in_srgb,var(--tari-text)_6%,var(--tari-bg-deep))] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span className="grid size-7 place-items-center rounded-full bg-[var(--tari-bg-input)]">{a.icon}</span>
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}

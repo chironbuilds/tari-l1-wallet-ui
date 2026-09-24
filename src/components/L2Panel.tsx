@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { ChevronLeft, Droplets, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Droplets, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { formatResourceAmount, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
 import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
-import { Button, CopyButton, EmptyState } from "./ui";
+import { ActionTiles, Button, CopyButton, EmptyState } from "./ui";
 
 /**
  * The Ootle (L2) view, laid out to mirror the L1 wallet column: balance card on top, holdings
@@ -163,34 +163,26 @@ export function L2Panel({
         </button>
       </div>
 
-      {/* Holdings header + quick actions, mirroring the L1 column's activity row */}
-      {/* Wraps rather than overflowing: three actions no longer fit beside the label in a narrow
-          card, so the group drops to its own line instead of running past the frame. */}
-      <div className="flex flex-wrap items-center justify-between gap-y-2 px-1">
-        <span className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-[var(--tari-text)]">
-          Balances
-          <Button
-            size="sm"
-            variant="ghost"
-            className="!px-1.5"
-            loading={loading}
-            onClick={() => store.refreshL2()}
-            aria-label="Refresh balances"
-          >
-            <RefreshCw size={12} />
-          </Button>
-        </span>
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-          <Button size="sm" variant="outline" className="shrink-0" disabled={!identity} onClick={() => onOpenPanel("l2send")}>
-            Send
-          </Button>
-          <Button size="sm" variant="outline" className="shrink-0" disabled={!identity} onClick={() => onOpenPanel("l2receive")}>
-            Receive
-          </Button>
-          <Button size="sm" variant="outline" className="shrink-0 !px-2.5" onClick={() => onOpenPanel("dapps")} title="Ootle apps">
-            <Grid3x3 size={12} /> Apps
-          </Button>
-        </div>
+      <ActionTiles
+        actions={[
+          { label: "Send", icon: <ArrowUpRight size={16} />, onClick: () => onOpenPanel("l2send"), disabled: !identity },
+          { label: "Receive", icon: <ArrowDownLeft size={16} />, onClick: () => onOpenPanel("l2receive"), disabled: !identity },
+          { label: "Apps", icon: <Grid3x3 size={16} />, onClick: () => onOpenPanel("dapps"), title: "Ootle apps" },
+        ]}
+      />
+
+      <div className="flex items-center justify-between px-1 pt-1">
+        <span className="text-sm font-bold text-[var(--tari-text)]">Balances</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="!px-1.5"
+          loading={loading}
+          onClick={() => store.refreshL2()}
+          aria-label="Refresh balances"
+        >
+          <RefreshCw size={12} />
+        </Button>
       </div>
 
       {error ? (
