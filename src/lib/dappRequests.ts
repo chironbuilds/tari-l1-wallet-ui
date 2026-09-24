@@ -17,7 +17,7 @@
  * session anyway. The difference is documented rather than papered over: `tari_getTransactionRequest`
  * on an unknown id after a wallet reload means "gone", not "still pending".
  */
-import type { FeeType, OotleAccount } from "../ootle";
+import { TARI_RESOURCE_ADDRESS, type FeeType, type OotleAccount } from "../ootle";
 import type { TransactionRequestOperation } from "./dappBridge";
 
 /** How long an approved-but-unsubmitted request stays submittable. Matches the extension's 15
@@ -161,23 +161,19 @@ export function forgetOrigin(origin: string): void {
   }
 }
 
-/** The Ootle native token -- engine-special-cased on-chain, so its resource address is a fixed,
- * well-known constant rather than something to look up per account. */
-const XTR_RESOURCE_ADDRESS = "resource_0101010101010101010101010101010101010101010101010101010101010101";
-
 /**
  * Resolves an operation's already-decided `feeType` ("private" | "transparent" | absent, set at
  * approval time — see `recordDecision`'s doc comment) into the SDK's `FeeType` shape.
  *
  * Deliberately does NOT look this up via `getBalances()` (revealed/vault balances): that can come
- * back with no XTR entry at all for an account holding XTR purely as shielded UTXOs (no revealed
+ * back with no TARI entry at all for an account holding TARI purely as shielded UTXOs (no revealed
  * vault ever touched), which is exactly the kind of account most likely to want a private fee.
  * Whether there's actually a shielded UTXO big enough to pay from is ootle-sdk-ts's own concern
  * (`selectPrivateFeeUtxo`), surfaced as its own clear error if not.
  */
 async function resolveFeeType(feeType: "private" | "transparent" | undefined): Promise<FeeType> {
   if (feeType !== "private") return { kind: "transparent" };
-  return { kind: "private", feeResourceAddress: XTR_RESOURCE_ADDRESS };
+  return { kind: "private", feeResourceAddress: TARI_RESOURCE_ADDRESS };
 }
 
 /**

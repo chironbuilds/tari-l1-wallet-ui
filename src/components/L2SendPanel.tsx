@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Send, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { parseOotleAddress } from "@tari-project/ootle-wasm";
-import { OOTLE_NETWORK, formatResourceAmount, toOotleNetwork, type TokenBalance } from "../ootle";
+import { OOTLE_NETWORK, TARI_RESOURCE_ADDRESS, formatResourceAmount, toOotleNetwork, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Button, Field, TextInput } from "./ui";
@@ -55,7 +55,7 @@ export function L2SendPanel() {
     [balances],
   );
   const [resourceAddress, setResourceAddress] = useState<string>(
-    () => usable.find((b) => b.symbol === "XTR")?.resourceAddress ?? usable[0]?.resourceAddress ?? "",
+    () => usable.find((b) => b.resourceAddress === TARI_RESOURCE_ADDRESS)?.resourceAddress ?? usable[0]?.resourceAddress ?? "",
   );
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -231,7 +231,7 @@ export function L2SendPanel() {
           <Wallet size={28} className="text-zinc-500" />
           <p className="text-sm font-bold text-[var(--tari-text)]">No funds available</p>
           <p className="max-w-[42ch] text-xs text-zinc-500">
-            This account holds no Ootle funds. Claim some test XTR from the Ootle card first.
+            This account holds no Ootle funds. Claim some test TARI from the Ootle card first.
           </p>
         </div>
       ) : (

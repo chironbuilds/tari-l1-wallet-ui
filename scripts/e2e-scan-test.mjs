@@ -88,7 +88,7 @@ while (Date.now() < deadline) {
 console.log("--- result ---");
 if (snapshot) {
   console.log(`utxos: ${snapshot.utxoCount}`);
-  console.log(`total : ${snapshot.totalMicro} microXTR`);
+  console.log(`total : ${snapshot.totalMicro} microXTM`);
   console.log(`resume checkpoint: ${snapshot.lastScannedHeight}`);
   for (const h of snapshot.history) console.log(`history · ${h}`);
 } else {

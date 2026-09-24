@@ -27,9 +27,14 @@ export type { ShieldedOutputRecord } from "@chironbuilder/ootle-sdk";
  * endpoint the SDK ships is Esmeralda's (`https://ootle-indexer-a.tari.com`). The L1 side of this
  * wallet is MainNet, so the two layers are deliberately not on the same network, and every L2
  * surface says so. Both are derived from the same seed, so the account is genuinely yours; the
- * funds on it are test XTR.
+ * funds on it are test TARI.
  */
 export const OOTLE_NETWORK = "esmeralda" as const;
+
+/** The Ootle native token (TARI, formerly XTR) -- engine-special-cased on-chain, so its resource
+ * address is a fixed, well-known constant. Match on this, never on the on-chain symbol, which
+ * changed with the XTR -> TARI rename. */
+export const TARI_RESOURCE_ADDRESS = "resource_0101010101010101010101010101010101010101010101010101010101010101";
 
 /** Shown wherever an L2 balance or address appears, so test funds are never mistaken for XTM. */
 export const OOTLE_NETWORK_LABEL = "Esmeralda testnet";

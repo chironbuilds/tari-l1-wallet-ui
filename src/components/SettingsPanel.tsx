@@ -13,6 +13,7 @@ import {
   Radar,
   ShieldCheck,
   Trash2,
+  TriangleAlert,
 } from "lucide-react";
 import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
@@ -35,8 +36,180 @@ const AUTO_LOCK_OPTIONS = [
   { value: 0, label: "Never" },
 ];
 
+// Wrong-PIN attempts allowed before the gate makes you wait, and how long the wait is.
+const MAX_PIN_ATTEMPTS = 5;
+const PIN_COOLDOWN_MS = 30_000;
 
+/**
+ * Settings exposes the seed phrase and backup hex, so an unattended open wallet must not hand them
+ * to whoever sits down at it. Every time the panel opens (it unmounts when closed) the PIN has to
+ * be re-entered; a wallet with no PIN yet must set one before anything here is shown, since
+ * without one there is nothing to check a passer-by against.
+ */
 export function SettingsPanel() {
+  const store = useStore();
+  const [authorized, setAuthorized] = useState(false);
+  if (!store.network) return null;
+  if (authorized) return <SettingsContent />;
+  return store.hasPin ? (
+    <PinGate onPass={() => setAuthorized(true)} />
+  ) : (
+    <SetPinGate onPass={() => setAuthorized(true)} />
+  );
+}
+
+function GateError({ message }: { message: string }) {
+  return (
+    <div className="animate-pop mt-4 flex items-start gap-2.5 rounded-xl border border-red-500/30 bg-red-500/10 p-3.5 text-sm text-[var(--st-red)]">
+      <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+      <span className="break-words">{message}</span>
+    </div>
+  );
+}
+
+function PinGate({ onPass }: { onPass: () => void }) {
+  const { verifyPin } = useStore();
+  const [pin, setPinValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [attempts, setAttempts] = useState(0);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (lockedUntil <= now) return;
+    const t = setTimeout(() => setNow(Date.now()), 1000);
+    return () => clearTimeout(t);
+  }, [lockedUntil, now]);
+
+  const coolingDown = lockedUntil > now;
+
+  const go = async () => {
+    if (!pin || busy || coolingDown) return;
+    setBusy(true);
+    setError(null);
+    const ok = await verifyPin(pin);
+    setBusy(false);
+    if (ok) {
+      onPass();
+      return;
+    }
+    setPinValue("");
+    const n = attempts + 1;
+    if (n >= MAX_PIN_ATTEMPTS) {
+      const until = Date.now() + PIN_COOLDOWN_MS;
+      setAttempts(0);
+      setLockedUntil(until);
+      setNow(Date.now());
+      setError(`Too many incorrect attempts. Try again in ${PIN_COOLDOWN_MS / 1000} seconds.`);
+    } else {
+      setAttempts(n);
+      setError("Incorrect PIN.");
+    }
+  };
+
+  return (
+    <Card className="mx-auto w-full max-w-md p-6 sm:p-7">
+      <h3 className="mb-1.5 flex items-center gap-2 text-sm font-bold text-[var(--tari-text)]">
+        <Lock size={15} /> Security & recovery
+      </h3>
+      <p className="mb-5 text-xs leading-relaxed text-zinc-500">
+        Enter your PIN to open settings. This keeps your recovery phrase safe if you leave the wallet open.
+      </p>
+      <Field label="PIN">
+        <TextInput
+          type="password"
+          inputMode="numeric"
+          autoFocus
+          value={pin}
+          onChange={(e) => setPinValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && go()}
+          placeholder="••••"
+          error={!!error}
+          disabled={coolingDown}
+        />
+      </Field>
+      {error && (
+        <GateError
+          message={coolingDown ? `Too many incorrect attempts. Try again in ${Math.ceil((lockedUntil - now) / 1000)} s.` : error}
+        />
+      )}
+      <Button className="mt-5 w-full" loading={busy} disabled={!pin || coolingDown} onClick={go}>
+        <KeyRound size={15} /> Unlock settings
+      </Button>
+    </Card>
+  );
+}
+
+function SetPinGate({ onPass }: { onPass: () => void }) {
+  const store = useStore();
+  const toast = useToast();
+  const [pin, setPinValue] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const go = async () => {
+    setError(null);
+    if (pin.length < MIN_PIN_LENGTH) {
+      setError(`PIN must be at least ${MIN_PIN_LENGTH} characters.`);
+      return;
+    }
+    if (pin !== confirmPin) {
+      setError("PINs don't match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await store.setPin(pin);
+      toast({ tone: "success", title: "PIN set", message: "Settings and your recovery phrase are now protected." });
+      onPass();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mx-auto w-full max-w-md p-6 sm:p-7">
+      <h3 className="mb-1.5 flex items-center gap-2 text-sm font-bold text-[var(--tari-text)]">
+        <ShieldCheck size={15} /> Set a PIN first
+      </h3>
+      <p className="mb-5 text-xs leading-relaxed text-zinc-500">
+        Settings shows your recovery phrase, so it needs a PIN. Anyone using this browser while the wallet is open
+        could otherwise copy it and take your coins. The PIN also encrypts the seed stored on this device.
+      </p>
+      <div className="grid gap-3">
+        <Field label="New PIN">
+          <TextInput
+            type="password"
+            inputMode="numeric"
+            autoFocus
+            value={pin}
+            onChange={(e) => setPinValue(e.target.value)}
+            placeholder="••••"
+          />
+        </Field>
+        <Field label="Confirm PIN">
+          <TextInput
+            type="password"
+            inputMode="numeric"
+            value={confirmPin}
+            onChange={(e) => setConfirmPin(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && go()}
+            placeholder="••••"
+            error={!!error}
+          />
+        </Field>
+      </div>
+      {error && <GateError message={error} />}
+      <Button className="mt-5 w-full" loading={busy} disabled={!pin || !confirmPin} onClick={go}>
+        <KeyRound size={15} /> Set PIN and continue
+      </Button>
+    </Card>
+  );
+}
+
+function SettingsContent() {
   const store = useStore();
   const toast = useToast();
   const [revealBackup, setRevealBackup] = useState(false);
@@ -222,7 +395,7 @@ export function SettingsPanel() {
           </Field>
           <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
             Private pays the fee from a shielded UTXO instead of your revealed balance, so the
-            transaction doesn't reveal this account on-chain. Requires some XTR already shielded —
+            transaction doesn't reveal this account on-chain. Requires some TARI already shielded —
             see the Private balance panel. A connected dApp can override this per request, or
             require one or the other outright.
           </p>

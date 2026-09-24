@@ -229,6 +229,8 @@ interface Store {
   /** Opts an unencrypted (legacy or never-secured) wallet into PIN protection. */
   setPin: (pin: string) => Promise<void>;
   changePin: (oldPin: string, newPin: string) => Promise<boolean>;
+  /** Checks `pin` against the encrypted seed without touching wallet state. False if no PIN is set. */
+  verifyPin: (pin: string) => Promise<boolean>;
   autoLockMinutes: number;
   setAutoLockMinutes: (minutes: number) => void;
   /** See `Persisted.feePrivacyDefault`'s doc comment. */
@@ -398,8 +400,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           try {
             const w = WasmWallet.fromBackupHex(p.backupHex, p.network);
             reconstructWalletState(w, p.backupHex, p.utxos ?? [], p.history ?? []);
-          } catch {
-            localStorage.removeItem(STORAGE_KEY);
+          } catch (e) {
+            // Never erase the saved wallet here: a failure to rebuild it (wasm not ready after a hot
+            // reload, a transient error) says nothing about whether the seed is good, and deleting it
+            // is unrecoverable for anyone without their phrase. Only forget() removes it.
+            console.error("Failed to restore saved wallet; leaving it on disk untouched", e);
           }
         }
       }
@@ -429,10 +434,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       spentHashes: Object.fromEntries(spentHashRef.current),
       burns,
     };
-    if (!backupHex && !encBackup) {
-      localStorage.removeItem(STORAGE_KEY);
-      return;
-    }
+    // No wallet in memory is not a reason to delete the saved one: it may simply have failed to
+    // load. Erasing is forget()'s job alone.
+    if (!backupHex && !encBackup) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
     } catch {
@@ -595,6 +599,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (hex === null) return false;
       setEncBackup(await encryptWithPin(hex, newPin));
       return true;
+    },
+    [encBackup],
+  );
+
+  const verifyPin = useCallback(
+    async (pin: string): Promise<boolean> => {
+      if (!encBackup) return false;
+      return (await decryptWithPin(encBackup, pin)) !== null;
     },
     [encBackup],
   );
@@ -1304,6 +1316,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     unlock,
     setPin,
     changePin,
+    verifyPin,
     autoLockMinutes,
     setAutoLockMinutes,
     feePrivacyDefault,

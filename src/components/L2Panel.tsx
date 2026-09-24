@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Droplets, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
-import { formatResourceAmount, type TokenBalance } from "../ootle";
+import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
 import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
@@ -13,7 +13,7 @@ import { ActionTiles, Button, CopyButton, EmptyState } from "./ui";
  *
  * Reads from the same seed as the L1 side, so this is the same wallet one layer up — but Ootle
  * has no public MainNet indexer, so the account here lives on Esmeralda and every surface says
- * so. Test XTR must never be mistaken for the MainNet XTM on the L1 side.
+ * so. Test TARI must never be mistaken for the MainNet XTM on the L1 side.
  */
 export function L2Panel({
   onOpenPanel,
@@ -54,7 +54,7 @@ export function L2Panel({
     setClaiming(true);
     try {
       await identity.account.claimTestnetXtr();
-      toast({ tone: "success", title: "Test XTR claimed", message: "Refreshing your balances…" });
+      toast({ tone: "success", title: "Test TARI claimed", message: "Refreshing your balances…" });
       store.refreshL2();
     } catch (e) {
       toast({
@@ -101,7 +101,7 @@ export function L2Panel({
           ) : (
             <>
               {headline ? formatResourceAmount(headline.amount, headline.divisibility) : "0"}{" "}
-              <span className="text-xs font-bold opacity-80">{headline?.symbol ?? "XTR"}</span>
+              <span className="text-xs font-bold opacity-80">{headline?.symbol ?? "TARI"}</span>
             </>
           )}
         </p>
@@ -113,7 +113,7 @@ export function L2Panel({
           <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-70">
             <Lock size={9} />
             {formatResourceAmount(headline.confidentialAmount, headline.divisibility)}{" "}
-            {headline.symbol ?? "XTR"} private
+            {headline.symbol ?? "TARI"} private
           </p>
         )}
 
@@ -146,7 +146,7 @@ export function L2Panel({
         >
           <span className="flex items-center gap-2 text-xs font-bold">
             {claiming ? <Loader2 size={14} className="animate-spin" /> : <Droplets size={14} />}
-            {claiming ? "Claiming…" : "Claim test XTR"}
+            {claiming ? "Claiming…" : "Claim test TARI"}
           </span>
           <span className="text-[10px] opacity-70">faucet</span>
         </button>
@@ -199,7 +199,7 @@ export function L2Panel({
         <EmptyState
           icon={<Wallet size={20} />}
           title="No balances"
-          sub="This account holds no Ootle funds yet. Claim test XTR from the faucet, or burn tXTM from layer 1."
+          sub="This account holds no Ootle funds yet. Claim test TARI from the faucet, or burn tXTM from layer 1."
         />
       ) : (
         <div className="space-y-2.5">
@@ -250,7 +250,7 @@ export function L2Panel({
 }
 
 /**
- * The resource the card leads with. XTR is Ootle's native token, so it wins when present;
+ * The resource the card leads with. TARI is Ootle's native token, so it wins when present;
  * otherwise the largest holding stands in, and an account with nothing shows a plain zero.
  *
  * NonFungible resources are excluded from "largest holding" — their `amount` is a token *count*,
@@ -263,7 +263,7 @@ export function L2Panel({
 function pickHeadline(balances: TokenBalance[]): TokenBalance | null {
   const eligible = balances.filter((b) => b.kind !== "NonFungible");
   if (eligible.length === 0) return null;
-  const xtr = eligible.find((b) => b.symbol === "XTR");
-  if (xtr) return xtr;
+  const tari = eligible.find((b) => b.resourceAddress === TARI_RESOURCE_ADDRESS);
+  if (tari) return tari;
   return eligible.reduce((best, b) => (b.amount > best.amount ? b : best), eligible[0]!);
 }
