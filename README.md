@@ -6,7 +6,7 @@ transaction is built and signed locally, in WebAssembly; nothing secret leaves t
 
 **Live:** [universe.tari.mw](https://universe.tari.mw)
 
-![Wallet dashboard](docs/screenshots/dashboard.jpg)
+![Tari L1 Web Wallet — self-custodial wallet with Ootle built in](docs/screenshots/hero-wallet.png)
 
 ## Feature comparison
 
@@ -60,7 +60,7 @@ never refunded.
 - Claim a burn made elsewhere, such as a `minotari_console_wallet` proof file, from the Ootle side.
 - MainNet burns are allowed but clearly marked as not claimable yet: Ootle does not run on MainNet.
 
-![Burning to Ootle](docs/screenshots/burn.png) ![Claimed on Ootle](docs/screenshots/ootle-claimed.png)
+![L1 burn flowing into a private Ootle balance](docs/screenshots/ootle-flow.png)
 
 ### Ootle (layer 2)
 
@@ -77,6 +77,8 @@ shield and unshield, rediscovering private funds, the testnet faucet, and a cata
 - Sign now and broadcast later: signed transactions can be saved, exported as JSON and broadcast
   from Activity.
 - Developer tools: Blake2b hashing, Ristretto Schnorr signatures and Pedersen commitments.
+
+![Security, recovery and local signing controls](docs/screenshots/security-recovery.png)
 
 ## Running it
 
