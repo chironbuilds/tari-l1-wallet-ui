@@ -184,7 +184,7 @@ export function Welcome() {
           hint={
             network === "mainnet"
               ? "Real XTM."
-              : "Test network with valueless tXTM. Required for burning to Ootle."
+              : "Test network with valueless tXTM. Burns here can be claimed on the Ootle testnet."
           }
         >
           <Segmented

@@ -29,7 +29,7 @@ import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subad
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
 import { configureRpcForNetwork, rpcKernelMerkleProof } from "./lib/rpc";
-import { CLAIM_RETRY_MS, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
+import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -816,14 +816,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         } catch {
           /* node unreachable — try again on the next pass */
         }
-      } else if (rec.status === "mined" && rec.toOwnAccount && Date.now() - (rec.lastAttemptAt ?? 0) >= CLAIM_RETRY_MS) {
+      } else if (
+        rec.status === "mined" &&
+        rec.toOwnAccount &&
+        burnClaimableNow(network) &&
+        Date.now() - (rec.lastAttemptAt ?? 0) >= CLAIM_RETRY_MS
+      ) {
         void claimBurn(rec.id, false);
       }
     }
-  }, [claimBurn]);
+  }, [claimBurn, network]);
 
   const burnsInFlight = burns.some(
-    (r) => r.status === "broadcast" || (r.status === "mined" && r.toOwnAccount) || (r.status === "external" && !r.merkle),
+    (r) =>
+      r.status === "broadcast" ||
+      (r.status === "mined" && r.toOwnAccount && burnClaimableNow(network)) ||
+      (r.status === "external" && !r.merkle),
   );
   useEffect(() => {
     if (!ready || !wallet || walletLocked || !burnsInFlight) return;

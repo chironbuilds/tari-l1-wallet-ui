@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ChevronLeft, Download, Flame, Info, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Download, Flame, Loader2, RefreshCw } from "lucide-react";
 import { WasmBurnBuilder } from "@chironbuilder/tari-l1-wasm";
-import { coinSymbol, estimateMaxSpend, selectInputs, submitViaMiddleware, broadcastBaseUrl } from "../lib/tari";
+import { coinSymbol, networkLabel, estimateMaxSpend, selectInputs, submitViaMiddleware, broadcastBaseUrl } from "../lib/tari";
 import { fetchMiddlewareTip } from "../lib/scanner";
 import { downloadText, formatMicro, tariToMicro, tick, timeAgo, truncMiddle } from "../lib/format";
 import {
-  burnSupported,
+  burnClaimableNow,
   claimProofFileText,
   isAwaitingL1Observation,
   partsFromSignedBurn,
@@ -36,10 +36,10 @@ export function BurnPanel() {
   const [stage, setStage] = useState<Stage>("form");
   const [justBurned, setJustBurned] = useState<{ amount: bigint } | null>(null);
 
-  const supported = burnSupported(store.network);
+  const claimable = burnClaimableNow(store.network);
+  const l2Symbol = store.network === "mainnet" ? "TARI" : "tTARI";
 
   useEffect(() => {
-    if (!supported) return;
     let cancelled = false;
     store
       .ootleClaimPublicKey()
@@ -49,7 +49,7 @@ export function BurnPanel() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supported, store.backupHex]);
+  }, [store.backupHex]);
 
   const amountMicro = useMemo(() => tariToMicro(amount), [amount]);
   const fpg = useMemo(() => {
@@ -65,7 +65,7 @@ export function BurnPanel() {
   const selection = amountMicro && fpg && amountMicro > 0n ? selectInputs(inputLikes, amountMicro, fpg) : null;
   const maxSpend = fpg ? estimateMaxSpend(inputLikes, fpg) : 0n;
   const receiveMicro = amountMicro && amountMicro > CLAIM_FEE_MICRO ? amountMicro - CLAIM_FEE_MICRO : 0n;
-  const canReview = supported && claimKeyValid && !!selection && receiveMicro > 0n && acknowledged;
+  const canReview = claimKeyValid && !!selection && receiveMicro > 0n && acknowledged;
 
   async function burn() {
     if (!store.wallet || !claimKey || !amountMicro || !fpg || !selection) return;
@@ -130,22 +130,6 @@ export function BurnPanel() {
     }
   }
 
-  if (!supported) {
-    return (
-      <div className="animate-fade-up">
-        <Header />
-        <div className="flex items-start gap-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-4 text-sm leading-relaxed text-[var(--tari-text)]">
-          <Info size={16} className="mt-0.5 shrink-0 text-zinc-500" />
-          <p>
-            Burning to Ootle is available on the Esmeralda testnet only. Ootle does not run on MainNet yet, so
-            MainNet {symbol} burned now could never be claimed. To try it, create or restore a wallet on
-            Esmeralda.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (stage === "done" && justBurned) {
     return (
       <div className="animate-fade-up">
@@ -153,9 +137,11 @@ export function BurnPanel() {
         <BurnAnimation
           amountLabel={`${formatMicro(justBurned.amount)} ${symbol} burned`}
           receiveLabel={
-            destination === "own"
-              ? "It will be claimed to your Ootle account automatically once the burn is confirmed."
-              : "Export the claim proof below once the burn is mined."
+            !claimable
+              ? `Not claimable yet: Ootle is not live on ${networkLabel(store.network)}. Export the proof once the burn is mined and keep it.`
+              : destination === "own"
+                ? "It will be claimed to your Ootle account automatically once the burn is confirmed."
+                : "Export the claim proof below once the burn is mined."
           }
           onDone={() => undefined}
         />
@@ -196,9 +182,12 @@ export function BurnPanel() {
             <span>{destination === "own" ? "Your Ootle account" : truncMiddle(claimKey ?? "", 10, 8)}</span>
           </Row>
           <Row label="Receive on Ootle (approx.)">
-            <span className="tabular">{formatMicro(receiveMicro)} tTARI</span>
+            <span className="tabular">
+              {claimable ? `${formatMicro(receiveMicro)} ${l2Symbol}` : "Not claimable yet"}
+            </span>
           </Row>
         </dl>
+        {!claimable && <NotClaimableWarning network={store.network} />}
         <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-zinc-500">
           <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[var(--st-amber)]" />
           This transaction permanently removes the {symbol} from layer 1. It cannot be reversed.
@@ -218,6 +207,7 @@ export function BurnPanel() {
   return (
     <div className="animate-fade-up">
       <Header />
+      {!claimable && <NotClaimableWarning network={store.network} />}
 
       <div className="space-y-4">
         <Field label="Claim to">
@@ -312,7 +302,7 @@ export function BurnPanel() {
         )}
         {amountMicro !== null && amountMicro > 0n && amountMicro <= CLAIM_FEE_MICRO && (
           <p className="text-center text-xs text-[var(--st-red)]">
-            The amount must exceed the Ootle claim fee of {formatMicro(CLAIM_FEE_MICRO)} tTARI.
+            The amount must exceed the Ootle claim fee of {formatMicro(CLAIM_FEE_MICRO)} {l2Symbol}.
           </p>
         )}
 
@@ -339,6 +329,21 @@ export function BurnPanel() {
   );
 }
 
+function NotClaimableWarning({ network }: { network: import("../lib/tari").NetworkId | null }) {
+  const name = networkLabel(network);
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[var(--st-red)]/30 bg-[var(--st-red)]/10 p-4 text-xs leading-relaxed text-[var(--tari-text)]">
+      <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--st-red)]" />
+      <p>
+        <b>Not claimable yet.</b> Ootle is not live on {name}. Burned {coinSymbol(network)} leaves layer 1 now, but can
+        only be claimed once Ootle launches on {name} — and only if that network accepts burns made before its launch,
+        which is not guaranteed. The wallet will not try to claim it; export the proof once the burn is mined and keep
+        it safe.
+      </p>
+    </div>
+  );
+}
+
 function Header() {
   return (
     <div className="mb-5">
@@ -350,8 +355,7 @@ function Header() {
       </h2>
       <p className="mt-2 text-xs leading-relaxed text-zinc-500">
         Move funds from Tari layer 1 to Ootle. The burned amount is claimed on Ootle one-for-one, less the claim
-        fee. Claims are accepted once the burn is well confirmed on layer 1, typically within an hour on
-        Esmeralda.
+        fee, once the burn is well confirmed on layer 1 (about an hour on Esmeralda).
       </p>
     </div>
   );
@@ -375,7 +379,10 @@ function stepIndex(rec: BurnRecord): number {
   }
 }
 
-function statusText(rec: BurnRecord): string {
+function statusText(rec: BurnRecord, claimable: boolean): string {
+  if (!claimable && (rec.status === "mined" || rec.status === "claiming")) {
+    return "Mined — not claimable until Ootle launches on this network";
+  }
   switch (rec.status) {
     case "broadcast":
       return "Waiting to be mined";
@@ -399,6 +406,7 @@ function BurnList() {
   const store = useStore();
   const toast = useToast();
   const symbol = coinSymbol(store.network);
+  const claimable = burnClaimableNow(store.network);
   const [claiming, setClaiming] = useState<string | null>(null);
 
   if (store.burns.length === 0) return null;
@@ -441,7 +449,7 @@ function BurnList() {
                 </div>
                 <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500">
                   {(rec.status === "broadcast" || rec.status === "claiming") && <Loader2 size={12} className="animate-spin" />}
-                  {statusText(rec)}
+                  {statusText(rec, claimable)}
                 </span>
               </div>
 
@@ -467,9 +475,9 @@ function BurnList() {
                 <p className="mt-2 text-[11px] break-words text-zinc-500">Last attempt: {rec.lastError.slice(0, 200)}</p>
               )}
 
-              {(proofText || (rec.status === "mined" && rec.toOwnAccount)) && (
+              {(proofText || (rec.status === "mined" && rec.toOwnAccount && claimable)) && (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {rec.status === "mined" && rec.toOwnAccount && (
+                  {rec.status === "mined" && rec.toOwnAccount && claimable && (
                     <Button size="sm" variant="outline" loading={claiming === rec.id} onClick={() => void claim(rec.id)}>
                       <RefreshCw size={12} /> Claim now
                     </Button>

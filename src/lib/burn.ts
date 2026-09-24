@@ -3,11 +3,12 @@ import { assembleBurnClaimProof, type BurnClaimProofContents, type L1BurnProofPa
 import type { NetworkId } from "./tari";
 
 /**
- * Burning is only offered where the burned coins can actually be claimed. Ootle runs on the
- * Esmeralda testnet alone, and a burn can only be claimed on the Ootle network that observes the
- * L1 it was burned on — a MainNet burn would destroy real XTM with nothing to claim it on.
+ * Whether a burn on `network` can be claimed today. A burn can only be claimed on the Ootle network
+ * that observes the L1 it was burned on, and Ootle runs on the Esmeralda testnet alone. Burning is
+ * still allowed elsewhere, behind a warning; those burns are tracked and their proofs exported, but
+ * never claimed automatically.
  */
-export function burnSupported(network: NetworkId | null): boolean {
+export function burnClaimableNow(network: NetworkId | null): boolean {
   return network === "esmeralda";
 }
 
