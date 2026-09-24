@@ -20,6 +20,10 @@ first, and it runs anywhere a browser does.
 | MainNet and testnet | Both, chosen with a toggle when you create or restore a wallet (MainNet or Esmeralda testnet) | Separate builds per network |
 | Ootle (layer 2) | Built in, from the same recovery phrase | — |
 | Burn XTM to Ootle | Yes: burn on L1, claimed on Ootle automatically | — |
+| Sub-addresses | Payment IDs for receiving and attributing payments | — |
+| Sender privacy | One-sided payments keep the sender's identity private by default; revealing the sender address is opt-in | — |
+| Offline signing and later broadcast | Save, export and broadcast signed transactions later from Activity | — |
+| Developer tools | Blake2b, Ristretto Schnorr and Pedersen commitment tools | — |
 | dApp connector | `window.tari`, the same provider API as the Sapient extension | — |
 | Mining | — | Yes, CPU and GPU |
 
