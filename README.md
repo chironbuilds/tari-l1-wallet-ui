@@ -8,24 +8,44 @@ transaction is built and signed locally, in WebAssembly; nothing secret leaves t
 
 ![Wallet dashboard](docs/screenshots/dashboard.jpg)
 
-## What it adds over Tari Universe (desktop)
+## Feature comparison
 
-Tari Universe is a desktop app built around mining, with a wallet included. This is a wallet
-first, and it runs anywhere a browser does.
+Tari Universe is a desktop application built around mining, with a wallet included. This project is
+wallet-first, browser-based, and adds the Ootle layer 2 account and dApp workflows described below.
 
-| | Tari L1 Web Wallet | Tari Universe (desktop) |
+| Feature | Tari L1 Web Wallet | Tari Universe (desktop) |
 |---|---|---|
-| Install | None: open the page | Desktop app download |
-| Chain sync | None: scans through a base node's public query service, in parallel web workers | Syncs its own node |
-| MainNet and testnet | Both, chosen with a toggle when you create or restore a wallet (MainNet or Esmeralda testnet) | Separate builds per network |
-| Ootle (layer 2) | Built in, from the same recovery phrase | — |
-| Burn XTM to Ootle | Yes: burn on L1, claimed on Ootle automatically | — |
-| Sub-addresses | Payment IDs for receiving and attributing payments | — |
-| Sender privacy | One-sided payments keep the sender's identity private by default; revealing the sender address is opt-in | — |
-| Offline signing and later broadcast | Save, export and broadcast signed transactions later from Activity | — |
-| Developer tools | Blake2b, Ristretto Schnorr and Pedersen commitment tools | — |
-| dApp connector | `window.tari`, the same provider API as the Sapient extension | — |
-| Mining | — | Yes, CPU and GPU |
+| Product shape | Self-custodial web wallet | Desktop application with wallet and mining |
+| Installation | None: open the web app | Desktop app download and installation |
+| Runtime | Browser-only; no wallet daemon, native wallet process, or local node | Native desktop application and local node |
+| Key management | Keys generated and used locally in WebAssembly | Managed by the desktop wallet stack |
+| Transaction signing | Build and sign locally in WebAssembly | Desktop wallet signing stack |
+| Chain sync | Scans a public base-node query service with parallel web workers | Syncs its own node |
+| MainNet | Yes | Yes |
+| Esmeralda testnet | Yes; selectable during create or restore | Separate network build |
+| L1 wallet | Yes | Yes |
+| L1 receiving and sending | Yes | Yes |
+| One-sided payments | Yes; dual-address payments keep the sender private by default | Not listed as a web-wallet feature |
+| Sender disclosure | Opt-in reveal of the sender address | — |
+| Sub-addresses | Payment IDs, labels, and incoming-payment attribution | — |
+| Delayed transaction broadcast | Sign, save/export, and broadcast later from Activity | — |
+| Signed transaction export | JSON export and re-broadcast from Activity | — |
+| Enciphered backup export | Yes | — |
+| Ootle layer 2 | Built in from the same recovery phrase | — |
+| Ootle public and private sends | Yes | — |
+| Ootle shield and unshield | Yes | — |
+| Ootle private-payment discovery | Automatic scanning and rediscovery | — |
+| Ootle fee selection | Private or transparent fee per transaction, including stealth fees | — |
+| Ootle dApps/apps | Built-in Ootle app catalogue | — |
+| L1 burn to Ootle | Burn on L1 and claim on Ootle automatically | — |
+| Burn to another Ootle account | Export a claim proof for the recipient account | — |
+| Import a burn proof | Claim a burn made elsewhere, including a console-wallet proof | — |
+| dApp provider | `window.tari`, matching the Sapient extension API | — |
+| dApp permissions | Connection, private-view, ownership-proof, and per-transaction approval | — |
+| dApp catalogue | Install and explore dApps in an embedded cross-origin frame | — |
+| Developer tools | Blake2b, Ristretto Schnorr, and Pedersen commitment tools | — |
+| CPU mining | — | Yes |
+| GPU mining | — | Yes |
 
 ### Burn to Ootle
 
