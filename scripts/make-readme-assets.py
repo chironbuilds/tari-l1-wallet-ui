@@ -63,7 +63,7 @@ def wrap(draw, text, fnt, width):
     return lines
 
 
-def text_column(img, step, eyebrow, headline, bullets, accent):
+def text_column(img, step, eyebrow, headline, bullets, accent, width=TEXT_W, headline_width=None):
     d = ImageDraw.Draw(img)
     y = 170
     # Step chip + eyebrow.
@@ -74,14 +74,14 @@ def text_column(img, step, eyebrow, headline, bullets, accent):
     d.text((MARGIN + 88, y + 12), eyebrow.upper(), font=font(BOLD, 30), fill=accent)
     y += 120
     h_f = font(BOLD, 78)
-    for line in wrap(d, headline, h_f, TEXT_W):
+    for line in wrap(d, headline, h_f, headline_width or width):
         d.text((MARGIN, y), line, font=h_f, fill=INK)
         y += 96
     y += 44
     b_f = font(REG, 34)
     for bullet in bullets:
         d.ellipse((MARGIN + 2, y + 17, MARGIN + 16, y + 31), fill=accent)
-        for i, line in enumerate(wrap(d, bullet, b_f, TEXT_W - 44)):
+        for i, line in enumerate(wrap(d, bullet, b_f, width - 44)):
             d.text((MARGIN + 40, y), line, font=b_f, fill=MUTED)
             y += 48
         y += 26
@@ -113,6 +113,63 @@ def place_shot(img, raw_name, crop, accent):
     )
 
 
+def rounded_paste(img, shot, xy, radius, outline=None, width=3):
+    mask = Image.new("L", shot.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, shot.width - 1, shot.height - 1), radius, fill=255)
+    img.paste(shot, xy, mask)
+    if outline:
+        x, y = xy
+        ImageDraw.Draw(img).rounded_rectangle((x, y, x + shot.width - 1, y + shot.height - 1), radius, outline=outline, width=width)
+
+
+def drop_shadow(img, box, radius, blur=40, alpha=190, offset=(10, 28)):
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    x1, y1, x2, y2 = box
+    ImageDraw.Draw(layer).rounded_rectangle((x1 + offset[0], y1 + offset[1], x2 + offset[0], y2 + offset[1]), radius, fill=(0, 0, 0, alpha))
+    img.alpha_composite(layer.filter(ImageFilter.GaussianBlur(blur)))
+
+
+def make_hero(card):
+    """Desktop app in a browser frame, with the same wallet on a phone overlapping its left edge."""
+    accent = card["accent"]
+    img = background(accent)
+
+    # Desktop: browser chrome bar + full-window capture.
+    desk = Image.open(RAW / "dashboard.png").convert("RGBA")
+    fw = 1240
+    fh = round(desk.height * fw / desk.width)
+    bar = 54
+    fx, fy = W - 90 - fw, 300
+    drop_shadow(img, (fx, fy, fx + fw, fy + bar + fh), 30)
+    frame = Image.new("RGBA", (fw, bar + fh), (28, 27, 36, 255))
+    d = ImageDraw.Draw(frame)
+    for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):
+        d.ellipse((26 + i * 30, 19, 42 + i * 30, 35), fill=c)
+    d.rounded_rectangle((fw // 2 - 190, 12, fw // 2 + 190, 42), 15, fill=(44, 42, 56))
+    url_f = font(REG, 22)
+    d.text((fw // 2 - d.textlength("universe.tari.mw", font=url_f) / 2, 14), "universe.tari.mw", font=url_f, fill=(170, 166, 190))
+    frame.paste(desk.resize((fw, fh), Image.Resampling.LANCZOS), (0, bar))
+    rounded_paste(img, frame, (fx, fy), 26, outline=accent + (120,))
+
+    # Phone: bezel around the phone-size capture, overlapping the frame's left edge.
+    # Trim the edge strips where the 3D tower shows behind the phone layout.
+    phone = Image.open(RAW / "dashboard-mobile.png").convert("RGBA")
+    phone = phone.crop((30, 0, phone.width - 30, phone.height))
+    ph = 1020
+    pw = round(phone.width * ph / phone.height)
+    bezel = 16
+    # Covers the desktop capture's own wallet panel (its left ~30%), so the two don't duplicate.
+    px, py = fx - 20, (H - ph) // 2 + 10
+    body = (px - bezel, py - bezel, px + pw + bezel, py + ph + bezel)
+    drop_shadow(img, body, 76, blur=46, alpha=220, offset=(14, 30))
+    ImageDraw.Draw(img).rounded_rectangle(body, 76, fill=(18, 17, 24), outline=(70, 66, 88), width=3)
+    rounded_paste(img, phone.resize((pw, ph), Image.Resampling.LANCZOS), (px, py), 62)
+
+    text_column(img, card["step"], card["eyebrow"], card["headline"], card["bullets"], accent, width=px - bezel - MARGIN - 60, headline_width=640)
+    img.convert("RGB").save(OUT / card["out"], optimize=True)
+    print("wrote", card["out"])
+
+
 CARDS = [
     dict(
         out="hero-wallet.png",
@@ -121,7 +178,7 @@ CARDS = [
         step="1",
         accent=(157, 92, 255),
         eyebrow="Tari L1 Web Wallet",
-        headline="Your Tari wallet, in any browser.",
+        headline="Tari and Ootle, in your browser.",
         bullets=[
             "Nothing to install and no chain to sync.",
             "Keys and signing stay local, in WebAssembly.",
@@ -174,6 +231,9 @@ CARDS = [
 
 
 for card in CARDS:
+    if card["out"] == "hero-wallet.png":
+        make_hero(card)
+        continue
     image = background(card["accent"])
     place_shot(image, card["raw"], card["crop"], card["accent"])
     text_column(image, card["step"], card["eyebrow"], card["headline"], card["bullets"], card["accent"])

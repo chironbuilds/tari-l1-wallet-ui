@@ -147,6 +147,13 @@ await store("addBurn", {
 
 await shot("dashboard");
 
+// Same wallet at phone size, for the hero's phone mockup.
+await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 3 });
+await sleep(1500);
+await shot("dashboard-mobile");
+await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
+await sleep(1500);
+
 await clickButton("Burn to Ootle");
 await shot("burn");
 
