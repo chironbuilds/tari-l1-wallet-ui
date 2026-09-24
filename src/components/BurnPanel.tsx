@@ -16,8 +16,11 @@ import { useToast } from "./toast";
 import { Button, CopyButton, Field, Logo, Segmented, TextInput, cn } from "./ui";
 import { BurnAnimation } from "./BurnAnimation";
 
-/** Revealed from the claimed value to pay the Ootle claim transaction's fee. */
-const CLAIM_FEE_MICRO = 2000n;
+/**
+ * What an Ootle claim costs, for the estimate shown before burning. The claim itself measures its
+ * exact fee with a dry run (about 13,300 µT on Esmeralda); this only needs to be close.
+ */
+const CLAIM_FEE_MICRO = 15_000n;
 
 type Stage = "form" | "review" | "burning" | "done";
 type Destination = "own" | "other";
