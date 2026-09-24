@@ -526,7 +526,11 @@ export function DappFrame({
       if (event.source !== frameRef.current?.contentWindow) return;
       if (event.origin !== origin) return;
       if (!isBridgeRequest(event.data)) return;
-      void handle(event.data).then((payload) => reply(event.data.id, payload));
+      // A throw anywhere in handle() (e.g. describeOperation rejecting malformed follow-up
+      // instructions) must still answer the dApp, not leave its request pending forever.
+      void handle(event.data)
+        .catch((e: unknown) => ({ error: ERROR.internal(e instanceof Error ? e.message : String(e)) }))
+        .then((payload) => reply(event.data.id, payload));
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

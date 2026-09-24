@@ -14,7 +14,6 @@ import {
   QrCode,
   Send,
   Settings as SettingsIcon,
-  ShieldCheck,
   Sun,
   Tag,
   Wallet as WalletIcon,
@@ -304,16 +303,20 @@ export function Dashboard() {
                 </span>
                 <span className="text-[10px] opacity-70">Esmeralda testnet</span>
               </button>
-              <button
-                onClick={() => openPanel("settings")}
-                className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
-              >
-                <span className="flex items-center gap-2 text-xs font-bold">
-                  {store.hasPin ? <ShieldCheck size={14} /> : <AlertCircle size={14} className="text-[var(--st-amber)]" />}
-                  Security & recovery
-                </span>
-                <span className="text-[10px] opacity-70">{store.hasPin ? "PIN set" : "No PIN set"}</span>
-              </button>
+              {/* Only a nudge while the wallet is unprotected; once a PIN is set, settings stay
+                  reachable from the rail's gear icon. */}
+              {!store.hasPin && (
+                <button
+                  onClick={() => openPanel("settings")}
+                  className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
+                >
+                  <span className="flex items-center gap-2 text-xs font-bold">
+                    <AlertCircle size={14} className="text-[var(--st-amber)]" />
+                    Security & recovery
+                  </span>
+                  <span className="text-[10px] opacity-70">No PIN set</span>
+                </button>
+              )}
             </div>
 
             <ActionTiles
