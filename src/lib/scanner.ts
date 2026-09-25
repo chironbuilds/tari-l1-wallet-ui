@@ -139,17 +139,39 @@ function withDeadline(signal: AbortSignal | undefined): AbortSignal {
   return typeof AbortSignal.any === "function" ? AbortSignal.any([signal, deadline]) : signal;
 }
 
+/** Waits before each retry of a failed batch; one more attempt than there are entries. */
+const BATCH_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+
+/**
+ * One batch, retried with backoff before it is allowed to fail.
+ *
+ * A single failed batch ends the whole scan, and a scan of a few weeks of blocks is thousands of
+ * requests. The public query services sit behind Cloudflare, whose rate limiting (like a 5xx from
+ * the node behind it) answers without the node's CORS headers — so the browser reports nothing but
+ * "Failed to fetch". On MainNet the bridge fallback happened to absorb those; on every other
+ * network there is no bridge, and the first refusal stopped the scan partway. `onRetry` lets the
+ * scan ease off, since retrying at the same rate would only be refused again.
+ */
 export async function fetchBlockBatch(
   baseUrl: string,
   from: number,
   to: number,
   signal?: AbortSignal,
+  onRetry?: () => void,
 ): Promise<ScanBlock[]> {
-  return withBridgeFallback(
-    () => rpcBlockBatch(from, to, withDeadline(signal)),
-    () => bridgeBlockBatch(baseUrl, from, to, signal),
-    signal,
-  );
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await withBridgeFallback(
+        () => rpcBlockBatch(from, to, withDeadline(signal)),
+        () => bridgeBlockBatch(baseUrl, from, to, signal),
+        signal,
+      );
+    } catch (e) {
+      if (signal?.aborted || attempt >= BATCH_RETRY_DELAYS_MS.length) throw e;
+      onRetry?.();
+      await new Promise((r) => setTimeout(r, BATCH_RETRY_DELAYS_MS[attempt]));
+    }
+  }
 }
 
 async function bridgeBlockBatch(
@@ -379,6 +401,12 @@ export async function scanRange(
 
   let cursor = from;
   let active = 0;
+  // Batches in flight. Halved whenever the node refuses one, so a rate-limited scan slows down
+  // until it is let through instead of retrying at the rate that got it refused.
+  let limit = Math.max(1, concurrency);
+  const easeOff = () => {
+    if (limit > 2) limit = Math.max(2, Math.floor(limit / 2));
+  };
   let failed = false;
   let completedUpTo = from - 1;
   const batches: BatchState[] = [];
@@ -404,14 +432,14 @@ export async function scanRange(
         if (active === 0) resolve();
         return;
       }
-      while (cursor <= to && active < concurrency) {
+      while (cursor <= to && active < limit) {
         const batchFrom = cursor;
         const batchTo = Math.min(cursor + BATCH - 1, to);
         cursor = batchTo + 1;
         active++;
         const state: BatchState = { from: batchFrom, to: batchTo, settled: false, clean: true };
         batches.push(state);
-        fetchBlockBatch(baseUrl, batchFrom, batchTo)
+        fetchBlockBatch(baseUrl, batchFrom, batchTo, undefined, easeOff)
           .then(async (blocks) => {
             /** Owned outputs awaiting a full re-fetch, grouped by the block they were mined in. */
             const hydrations: { height: number; hits: string[]; inputs: string[] }[] = [];
