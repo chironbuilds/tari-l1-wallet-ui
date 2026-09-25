@@ -3,6 +3,7 @@ import { KeyRound, TriangleAlert } from "lucide-react";
 import { useStore } from "../store";
 import { truncMiddle } from "../lib/format";
 import { Button, Card, Field, Logo, TextInput } from "./ui";
+import { NetworkSwitch } from "./NetworkSwitch";
 
 export function LockScreen() {
   const { unlock, forget, lockedAddressHint } = useStore();
@@ -41,6 +42,7 @@ export function LockScreen() {
               ? `Enter your PIN to unlock ${truncMiddle(lockedAddressHint, 8, 8)}.`
               : "Enter your PIN to unlock this wallet."}
           </p>
+          <NetworkSwitch className="mt-3" />
         </div>
 
         <Field label="PIN">

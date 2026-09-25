@@ -15,6 +15,15 @@ export const NETWORKS = [
 
 export type NetworkId = (typeof NETWORKS)[number]["id"];
 
+/**
+ * The networks the L1 wallet can be switched between in one tap. Esmeralda is the testnet because
+ * it is the L1 that Ootle observes, so burns made there can be claimed.
+ */
+export const L1_SWITCHABLE_NETWORKS: ReadonlyArray<{ id: NetworkId; short: string }> = [
+  { id: "mainnet", short: "MainNet" },
+  { id: "esmeralda", short: "Testnet" },
+];
+
 export const FEATURES_AND_SCRIPTS_BYTES = 300;
 
 export function parseAddress(input: string): WasmTariAddress | null {

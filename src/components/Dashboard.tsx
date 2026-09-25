@@ -39,6 +39,7 @@ import { AddressSwitcher } from "./AddressSwitcher";
 import { LayerJump } from "./LayerJump";
 import { BurnPanel } from "./BurnPanel";
 import { ClaimBurnPanel } from "./ClaimBurnPanel";
+import { NetworkSwitch } from "./NetworkSwitch";
 import { coinSymbol, networkLabel } from "../lib/tari";
 
 type Panel =
@@ -265,14 +266,12 @@ export function Dashboard() {
                   </>
                 )}
               </p>
-              <p className="mt-1 flex items-center gap-2 text-[11px] opacity-70">
-                Available balance
-                {!isMainnet && (
-                  <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase">
-                    {networkLabel(store.network)} testnet
-                  </span>
-                )}
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="truncate text-[11px] opacity-70" title={`${networkLabel(store.network)} balance`}>
+                  Available balance
+                </p>
+                <NetworkSwitch tone="card" />
+              </div>
               {store.pendingMicro > 0n && (
                 <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-60" title="Change from a broadcast transaction — spendable once it is mined and scanned">
                   <Loader2 size={9} className="animate-spin" />

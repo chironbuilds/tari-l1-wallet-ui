@@ -21,6 +21,7 @@ import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
 import { getRpcBase } from "../lib/rpc";
 import { networkLabel } from "../lib/tari";
+import { NetworkSwitch } from "./NetworkSwitch";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { useToast } from "./toast";
 import { Badge, Button, Card, CopyButton, Field, Segmented, Switch, TextInput } from "./ui";
@@ -668,10 +669,13 @@ function SettingsContent() {
             <Trash2 size={15} /> Erase wallet
           </Button>
         </div>
-        <p className="mt-5 border-t border-[var(--tari-border)] pt-4 text-[11px] text-zinc-600">
-          Network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. A wallet stays on the network it was
-          created for; to use another network, erase this wallet and restore it there.
-        </p>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tari-border)] pt-4">
+          <p className="text-[11px] text-zinc-600">
+            L1 network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. The same recovery phrase is used on
+            both; balances, activity, burns and sub-addresses are kept separately per network.
+          </p>
+          <NetworkSwitch />
+        </div>
       </Card>
 
       {/* CPAL-1.0 Exhibit B attribution: deployments of this code keep this notice visible. */}

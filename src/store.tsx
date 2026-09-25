@@ -138,6 +138,57 @@ interface Persisted {
   spentHashes?: Record<string, string>;
   /** Burns to Ootle, tracked from broadcast through to the claim. */
   burns?: BurnRecord[];
+  /**
+   * Everything that belongs to one chain, per network the wallet has been opened on. The same seed
+   * owns different outputs on MainNet and Esmeralda, so nothing here may ever be shared between
+   * them: a MainNet UTXO offered for spending on Esmeralda, or a scan cursor carried across, would
+   * be silently wrong. The top-level `utxos`, `history`, … mirror the active network's entry so an
+   * older build reading this record still sees a consistent single-network wallet.
+   */
+  chains?: Partial<Record<NetworkId, ChainState>>;
+}
+
+/** The per-network part of a wallet's saved state. See `Persisted.chains`. */
+interface ChainState {
+  utxos: UtxoRecord[];
+  history: TxRecord[];
+  burns: BurnRecord[];
+  spentHashes: Record<string, string>;
+  lastScannedHeight: number | null;
+  subAddresses: SubAddress[];
+  /** A custom broadcast node serves one network only. */
+  nodeUrl: string;
+  /** This seed's address on that network, for the lock screen. Unknown until first opened there. */
+  publicAddressBase58?: string;
+}
+
+function emptyChainState(): ChainState {
+  return {
+    utxos: [],
+    history: [],
+    burns: [],
+    spentHashes: {},
+    lastScannedHeight: null,
+    subAddresses: [],
+    nodeUrl: "",
+  };
+}
+
+/** Makes `network` the active one, copying its chain state into the record's top-level mirror. */
+function activateChain(p: Persisted, network: NetworkId): Persisted {
+  const chain = p.chains?.[network] ?? emptyChainState();
+  return {
+    ...p,
+    network,
+    publicAddressBase58: chain.publicAddressBase58,
+    utxos: chain.utxos,
+    history: chain.history,
+    burns: chain.burns,
+    spentHashes: chain.spentHashes,
+    lastScannedHeight: chain.lastScannedHeight,
+    subAddresses: chain.subAddresses,
+    nodeUrl: chain.nodeUrl,
+  };
 }
 
 function loadPersisted(): Persisted | null {
@@ -146,7 +197,23 @@ function loadPersisted(): Persisted | null {
     if (!raw) return null;
     const p = JSON.parse(raw) as Persisted;
     if (p.v !== 1) return null;
-    return p;
+    if (!p.chains) {
+      // Saved before per-network state existed: everything at the top level is the one network's.
+      p.chains = {
+        [p.network]: {
+          utxos: p.utxos ?? [],
+          history: p.history ?? [],
+          burns: p.burns ?? [],
+          spentHashes: p.spentHashes ?? {},
+          lastScannedHeight: p.lastScannedHeight ?? null,
+          subAddresses: p.subAddresses ?? [],
+          nodeUrl: p.nodeUrl ?? "",
+          publicAddressBase58: p.publicAddressBase58,
+        },
+      };
+    }
+    // The chain entry is authoritative; the top-level fields are only its mirror.
+    return activateChain(p, p.network);
   } catch {
     return null;
   }
@@ -229,6 +296,13 @@ interface Store {
   /** Opts an unencrypted (legacy or never-secured) wallet into PIN protection. */
   setPin: (pin: string) => Promise<void>;
   changePin: (oldPin: string, newPin: string) => Promise<boolean>;
+  /**
+   * Moves the wallet to `network`: saves this network's state, makes `network` active and reloads.
+   * The seed is shared, but UTXOs, scan cursor, activity, burns, sub-addresses and the custom node
+   * are kept per network. A reload is required: the wasm pins its consensus-hash network once per
+   * page (a `OnceLock`), so a second network cannot be used in the same page.
+   */
+  switchNetwork: (network: NetworkId) => void;
   /** Checks `pin` against the encrypted seed without touching wallet state. False if no PIN is set. */
   verifyPin: (pin: string) => Promise<boolean>;
   autoLockMinutes: number;
@@ -328,6 +402,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   /** See `Persisted.spentHashes`: outlives the handle so a spend can still be attributed. */
   const spentHashRef = useRef(new Map<string, string>());
   const lastScannedRef = useRef<number | null>(null);
+  // The other networks' saved state, carried through untouched so saving this network's state never
+  // drops theirs.
+  const otherChainsRef = useRef<Partial<Record<NetworkId, ChainState>>>({});
+  // Set once a network switch has written its record. Until the reload lands, anything still in
+  // flight (a scan batch, a broadcast result) may update state, and the save effect must not write
+  // that back over the record with the old network still marked active.
+  const switchingRef = useRef(false);
 
   const handles = useRef(new Map<string, WasmWalletOutput>());
 
@@ -383,6 +464,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         }
         if (p.burns) setBurns(p.burns);
+        const { [p.network]: _active, ...others } = p.chains ?? {};
+        otherChainsRef.current = others;
         if (p.network) {
           configureRpcForNetwork(p.network);
           setNetwork(p.network);
@@ -413,30 +496,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!ready || walletLocked) return;
-    const p: Persisted = {
-      v: 1,
-      network: (network ?? "mainnet") as NetworkId,
-      backupHex: encBackup ? null : backupHex,
-      encBackup,
-      publicAddressBase58: addressInfo?.base58,
-      autoLockMinutes,
-      feePrivacyDefault,
+  /** The full record for what is in memory now, with the active network's chain state folded in. */
+  const snapshot = (): Persisted => {
+    const net = (network ?? "mainnet") as NetworkId;
+    // Another tab may have saved newer state for the other networks since this one loaded, so take
+    // theirs from disk rather than writing back the copy read at mount. Only when the record on disk
+    // is this same seed; otherwise (a PIN change in flight, say) the last known copy stands.
+    const disk = loadPersisted();
+    const seedOf = (p: { encBackup?: EncryptedBlob | null; backupHex: string | null }) => p.encBackup?.ct ?? p.backupHex;
+    if (disk?.chains && seedOf(disk) === seedOf({ encBackup, backupHex })) {
+      const { [net]: _mine, ...others } = disk.chains;
+      otherChainsRef.current = others;
+    }
+    const chain: ChainState = {
       utxos,
       history,
+      burns,
+      spentHashes: Object.fromEntries(spentHashRef.current),
+      lastScannedHeight,
       subAddresses,
       nodeUrl,
-      scannerUrl,
-      scanThreads,
-      birthdayMs,
-      lastScannedHeight,
-      spentHashes: Object.fromEntries(spentHashRef.current),
-      burns,
+      publicAddressBase58: addressInfo?.base58,
     };
+    return activateChain(
+      {
+        v: 1,
+        network: net,
+        backupHex: encBackup ? null : backupHex,
+        encBackup,
+        autoLockMinutes,
+        feePrivacyDefault,
+        scannerUrl,
+        scanThreads,
+        birthdayMs,
+        ...chain,
+        chains: { ...otherChainsRef.current, [net]: chain },
+      },
+      net,
+    );
+  };
+
+  useEffect(() => {
+    if (!ready || walletLocked || switchingRef.current) return;
     // No wallet in memory is not a reason to delete the saved one: it may simply have failed to
     // load. Erasing is forget()'s job alone.
     if (!backupHex && !encBackup) return;
+    const p = snapshot();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
     } catch {
@@ -462,15 +567,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     burns,
   ]);
 
+  // One network is active per browser. When another tab switches it (or erases the wallet), this
+  // tab's state belongs to a network that is no longer the saved one: stop saving before it can
+  // overwrite that tab's record, and reload onto whatever is saved now. A tab that reloads lands on
+  // the same network as the writer, so two tabs cannot keep reloading each other.
+  useEffect(() => {
+    if (!network) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY && e.key !== null) return;
+      if (loadPersisted()?.network === network) return;
+      switchingRef.current = true;
+      stopRef.current = true;
+      window.location.reload();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [network]);
+
   const setWalletBirthday = useCallback((ms: number) => {
     setBirthdayMsState(ms);
     setLastScannedHeight(null);
   }, []);
 
+  /**
+   * A new seed owns nothing that any saved chain state describes, on any network — the previous
+   * wallet's other-network state and spend bookkeeping must not follow it.
+   */
+  const resetChainMemory = () => {
+    otherChainsRef.current = {};
+    spentHashRef.current.clear();
+    everOwnedRef.current.clear();
+    ownChangeRef.current.clear();
+    setSubAddresses([]);
+    setActiveSubAddressState(null);
+    setNodeUrlState("");
+  };
+
   const createWallet = useCallback(async (net: NetworkId, pin: string) => {
     configureRpcForNetwork(net);
     const w = new WasmWallet(net);
     handles.current.clear();
+    resetChainMemory();
     const hex = w.getBackupHex();
     const enc = await encryptWithPin(hex, pin);
     setWallet(w);
@@ -505,6 +642,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       const enc = await encryptWithPin(trimmed, pin);
       handles.current.clear();
+      resetChainMemory();
       setWallet(w);
       setNetwork(net);
       setBackupHex(trimmed);
@@ -528,6 +666,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     wallet?.free();
     localStorage.removeItem(STORAGE_KEY);
     wipeOotleState();
+    otherChainsRef.current = {};
+    spentHashRef.current.clear();
     setSubAddresses([]);
     setActiveSubAddressState(null);
     setLayerState("L1");
@@ -583,6 +723,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [encBackup, network, utxos, history],
   );
+
+  const switchNetwork = (next: NetworkId) => {
+    if (next === network || switchingRef.current) return;
+    // Unlocked, memory holds the newest copy of this network's state. Locked, the save effect has
+    // not run since the lock, so the record on disk already is the newest.
+    const base = walletLocked ? loadPersisted() : snapshot();
+    if (!base || (!base.backupHex && !base.encBackup)) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(activateChain(base, next)));
+    } catch {
+      return; // storage full or blocked: stay where we are rather than reload into stale state
+    }
+    stopRef.current = true;
+    switchingRef.current = true;
+    window.location.reload();
+  };
 
   const setPin = useCallback(
     async (pin: string) => {
@@ -1314,6 +1470,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     lockedAddressHint,
     lock,
     unlock,
+    switchNetwork,
     setPin,
     changePin,
     verifyPin,

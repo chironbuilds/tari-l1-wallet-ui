@@ -24,7 +24,7 @@ export function ReceivePanel() {
   // A sub-address has no separate emoji form cached; derive it so the toggle still works.
   const shownEmoji = activeSub ? (parseAddress(activeSub.base58)?.toEmoji() ?? addr.emoji) : addr.emoji;
   const display = useEmoji ? shownEmoji : shownBase58;
-  const qrValue = `tari://mainnet/transactions/send?tariAddress=${shownBase58}`;
+  const qrValue = `tari://${store.network ?? "mainnet"}/transactions/send?tariAddress=${shownBase58}`;
 
   return (
     <div className="flex flex-col items-center">
