@@ -229,7 +229,7 @@ export function SendPanel() {
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
           <Send size={15} />
         </span>
-        Send Tari
+        Send XTM
       </h2>
 
       <div className="space-y-4">
