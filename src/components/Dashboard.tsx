@@ -72,15 +72,29 @@ function useIsPhone() {
   return isPhone;
 }
 
+const THEME_KEY = "tari-l1-wallet/theme";
+
 export function Dashboard() {
   const store = useStore();
   const [panel, setPanel] = useState<Panel>(null);
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) === "dark";
+    } catch {
+      return false;
+    }
+  });
   const isPhone = useIsPhone();
 
 
+  // Persisted so the choice survives a reload or a lock → unlock (which remounts the Dashboard).
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "";
+    try {
+      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    } catch {
+      // storage unavailable (private mode); the theme just won't persist
+    }
   }, [dark]);
 
   // Any activity resets the idle timer; hitting it locks the wallet (a no-op until a PIN is set,
