@@ -40,9 +40,9 @@ export function SendPanel() {
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [feePerGram, setFeePerGram] = useState("5");
-  // Off by default: a one-sided payment tells the recipient nothing about who sent it, and giving
-  // that up is a choice the sender should make deliberately, per payment.
-  const [revealSender, setRevealSender] = useState(false);
+  // Revealed by default: most payments (exchanges especially) need to see who sent them to credit
+  // the deposit, and a sender who wants privacy can turn it off deliberately (with a warning).
+  const [revealSender, setRevealSender] = useState(true);
   const [stage, setStage] = useState<Stage>("idle");
   const [result, setResult] = useState<BuildResult | null>(null);
 
@@ -301,7 +301,21 @@ export function SendPanel() {
         </Field>
 
         <button
-          onClick={() => setRevealSender((v) => !v)}
+          onClick={() =>
+            setRevealSender((v) => {
+              const next = !v;
+              // Warn when the user turns OFF address disclosure: exchanges match deposits by sender
+              // address, so a hidden one often means the funds are not credited.
+              if (!next) {
+                toast({
+                  tone: "info",
+                  title: "Hiding your address",
+                  message: "If you are sending to an exchange, please reveal your address — otherwise your deposit may not be credited.",
+                });
+              }
+              return next;
+            })
+          }
           className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-left"
         >
           <span className="min-w-0">
@@ -330,6 +344,13 @@ export function SendPanel() {
             />
           </span>
         </button>
+
+        {!revealSender && (
+          <p className="rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 px-3.5 py-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
+            Your address is hidden. <b>Sending to an exchange? Turn “Reveal my address” on</b> — exchanges
+            match deposits by sender address, and a hidden one is often not credited.
+          </p>
+        )}
 
         <div className="flex items-center justify-between rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3">
           <span className="text-sm text-zinc-400">Fee rate</span>
