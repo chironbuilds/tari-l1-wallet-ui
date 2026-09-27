@@ -28,7 +28,12 @@ import { deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
-import { configureRpcForNetwork, rpcKernelMerkleProof } from "./lib/rpc";
+import {
+  configureRpcForNetwork,
+  DEFAULT_MAINNET_NODE_ID,
+  rpcKernelMerkleProof,
+  setMainnetNodeId,
+} from "./lib/rpc";
 import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
@@ -125,6 +130,9 @@ interface Persisted {
   /** Default fee-payment type for L2/Ootle transactions when a connected dApp doesn't enforce
    * one. "transparent" (unchanged behavior) unless the user opts in to "private". */
   feePrivacyDefault?: "private" | "transparent";
+  /** The selected MainNet query node id (see `MAINNET_NODES`). MainNet-only; other networks have a
+   * single fixed node. Absent = the default node. */
+  mainnetNode?: string;
   subAddresses?: SubAddress[];
   /**
    * Chain output hash -> commitment, for outputs this wallet has spent.
@@ -310,6 +318,10 @@ interface Store {
   /** See `Persisted.feePrivacyDefault`'s doc comment. */
   feePrivacyDefault: "private" | "transparent";
   setFeePrivacyDefault: (v: "private" | "transparent") => void;
+  /** The selected MainNet query node id. Only affects MainNet; changing it repoints scanning and
+   * broadcasts at that node. See `MAINNET_NODES`. */
+  mainnetNode: string;
+  setMainnetNode: (id: string) => void;
   fundDemo: (valueMicro: bigint) => void;
   addScannedOutput: (handle: WasmWalletOutput, minedHeight: number, maturityHeight: number, raw?: ScanOutput) => void;
   getHandle: (id: string) => WasmWalletOutput | undefined;
@@ -362,6 +374,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [lockedAddressHint, setLockedAddressHint] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutesState] = useState(5);
   const [feePrivacyDefault, setFeePrivacyDefaultState] = useState<"private" | "transparent">("transparent");
+  const [mainnetNode, setMainnetNodeState] = useState<string>(DEFAULT_MAINNET_NODE_ID);
   // Stashes the just-loaded persisted record while locked, so unlock() can finish the restore the
   // mount effect deferred instead of re-reading (and re-trusting) localStorage a second time.
   const pendingPersistedRef = useRef<Persisted | null>(null);
@@ -458,6 +471,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (p.subAddresses) setSubAddresses(p.subAddresses);
         if (p.autoLockMinutes !== undefined) setAutoLockMinutesState(p.autoLockMinutes);
         if (p.feePrivacyDefault !== undefined) setFeePrivacyDefaultState(p.feePrivacyDefault);
+        // Apply the MainNet node choice before configureRpcForNetwork below, so the query base
+        // comes up on the chosen node rather than the default.
+        if (p.mainnetNode) {
+          setMainnetNodeState(p.mainnetNode);
+          setMainnetNodeId(p.mainnetNode);
+        }
         if (p.spentHashes) {
           for (const [hash, commitment] of Object.entries(p.spentHashes)) {
             spentHashRef.current.set(hash.toLowerCase(), commitment.toLowerCase());
@@ -526,6 +545,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         encBackup,
         autoLockMinutes,
         feePrivacyDefault,
+        mainnetNode,
         scannerUrl,
         scanThreads,
         birthdayMs,
@@ -556,6 +576,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addressInfo,
     autoLockMinutes,
     feePrivacyDefault,
+    mainnetNode,
     utxos,
     history,
     subAddresses,
@@ -773,6 +794,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const setFeePrivacyDefault = useCallback((v: "private" | "transparent") => {
     setFeePrivacyDefaultState(v);
+  }, []);
+
+  // Repoints the query service immediately so the next scan/refresh uses the chosen node. On any
+  // network other than MainNet this is stored but has no effect until MainNet is active (the query
+  // base is fixed per non-MainNet network).
+  const setMainnetNode = useCallback((id: string) => {
+    setMainnetNodeState(id);
+    setMainnetNodeId(id);
   }, []);
 
   const fundDemo = useCallback(
@@ -1478,6 +1507,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAutoLockMinutes,
     feePrivacyDefault,
     setFeePrivacyDefault,
+    mainnetNode,
+    setMainnetNode,
     fundDemo,
     addScannedOutput,
     removeSpent,

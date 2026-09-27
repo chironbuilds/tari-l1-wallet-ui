@@ -19,7 +19,7 @@ import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
 import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
-import { getRpcBase } from "../lib/rpc";
+import { getRpcBase, MAINNET_NODES } from "../lib/rpc";
 import { networkLabel } from "../lib/tari";
 import { NetworkSwitch } from "./NetworkSwitch";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
@@ -676,6 +676,29 @@ function SettingsContent() {
           </p>
           <NetworkSwitch />
         </div>
+        {store.network === "mainnet" && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tari-border)] pt-4">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-[var(--tari-text)]">MainNet node</p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
+                Which base node this wallet queries for scanning and broadcasts. All are archival
+                MainNet nodes — switch if one is slow or unreachable.
+              </p>
+            </div>
+            <select
+              value={store.mainnetNode}
+              onChange={(e) => store.setMainnetNode(e.target.value)}
+              aria-label="MainNet node"
+              className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
+            >
+              {MAINNET_NODES.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </Card>
 
       {/* CPAL-1.0 Exhibit B attribution: deployments of this code keep this notice visible. */}

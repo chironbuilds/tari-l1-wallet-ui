@@ -27,17 +27,69 @@ const RPC_URLS: Record<string, string> = {
   igor: "https://rpc.igor.tari.com",
 };
 
+/** A selectable MainNet query node. */
+export interface MainnetNode {
+  id: string;
+  label: string;
+  url: string;
+}
+
+/**
+ * The MainNet query nodes a user may pick between (Settings → MainNet node). All serve the same
+ * base-node HTTP query API; the choice mainly steers scanning/sync (reads go straight to the node),
+ * since a broadcast propagates from whichever MainNet node receives it.
+ *
+ * The taritalk nodes only allow browser (CORS) requests from `https://universe.tari.mw`, so they
+ * are reachable from the deployed wallet but not from a local dev origin.
+ */
+export const MAINNET_NODES: MainnetNode[] = [
+  { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
+  { id: "casablanca", label: "Casablanca (taritalk)", url: "https://wallet-query.taritalk.xyz" },
+  { id: "singapore", label: "Singapore (taritalk)", url: "https://wallet-query-sg.taritalk.xyz" },
+];
+
+export const DEFAULT_MAINNET_NODE_ID = MAINNET_NODES[0].id;
+
+/** The chosen node for `id`, falling back to the default if the id is unknown (e.g. removed). */
+export function mainnetNodeById(id: string): MainnetNode {
+  return MAINNET_NODES.find((n) => n.id === id) ?? MAINNET_NODES[0];
+}
+
 let rpcBase: string | null = DEFAULT_RPC_URL;
 let rpcNetwork = "mainnet";
+/** Which MainNet node `configureRpcForNetwork` points at; only meaningful on MainNet. */
+let mainnetNodeId = DEFAULT_MAINNET_NODE_ID;
+
+/** The MainNet query base for the current node choice. Other networks have one fixed node. */
+function baseForNetwork(network: string): string {
+  if (network === "mainnet") return mainnetNodeById(mainnetNodeId).url;
+  return RPC_URLS[network] ?? DEFAULT_RPC_URL;
+}
+
+/**
+ * Records the user's MainNet node choice and, when MainNet is active, repoints the query service at
+ * it. Set this before `configureRpcForNetwork` on load so the base comes up on the chosen node.
+ */
+export function setMainnetNodeId(id: string): void {
+  mainnetNodeId = mainnetNodeById(id).id;
+  if (rpcNetwork === "mainnet") {
+    rpcBase = mainnetNodeById(mainnetNodeId).url;
+  }
+}
+
+export function getMainnetNodeId(): string {
+  return mainnetNodeId;
+}
 
 /**
  * Points every query and broadcast at `network`'s node. The gRPC bridge is a MainNet deployment,
  * so on any other network it is never used as a fallback: answering an Esmeralda wallet with
- * MainNet data would be worse than failing.
+ * MainNet data would be worse than failing. On MainNet it honours the current node choice
+ * (`setMainnetNodeId`).
  */
 export function configureRpcForNetwork(network: string): void {
   rpcNetwork = network;
-  rpcBase = RPC_URLS[network] ?? DEFAULT_RPC_URL;
+  rpcBase = baseForNetwork(network);
 }
 
 export function getRpcNetwork(): string {
