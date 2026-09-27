@@ -27,44 +27,76 @@ const RPC_URLS: Record<string, string> = {
   igor: "https://rpc.igor.tari.com",
 };
 
-/** A selectable MainNet query node. */
-export interface MainnetNode {
+/** A selectable query node for a given network. */
+export interface NodeOption {
   id: string;
   label: string;
   url: string;
 }
 
-/**
- * The MainNet query nodes a user may pick between (Settings → MainNet node). All serve the same
- * base-node HTTP query API; the choice mainly steers scanning/sync (reads go straight to the node),
- * since a broadcast propagates from whichever MainNet node receives it.
- *
- * Nodes are labelled by operator/region only — no third-party branding. The alternate nodes allow
- * browser (CORS) requests only from `https://universe.tari.mw`, so they are reachable from the
- * deployed wallet but not from a local dev origin. A stored selection whose id is no longer listed
- * (e.g. a decommissioned node) falls back to the default via `mainnetNodeById`.
- */
-export const MAINNET_NODES: MainnetNode[] = [
-  { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
-  { id: "ashburn", label: "Ashburn (US)", url: "https://wallet-query-us-01.nodes.taritalk.xyz" },
-  { id: "phoenix", label: "Phoenix (US)", url: "https://wallet-query-us-03.nodes.taritalk.xyz" },
-  { id: "batam", label: "Batam (ID)", url: "https://wallet-query-id-01.nodes.taritalk.xyz" },
-  { id: "kulai", label: "Kulai (MY)", url: "https://wallet-query-my-01.nodes.taritalk.xyz" },
-  { id: "mumbai", label: "Mumbai (IN)", url: "https://wallet-query-in-01.nodes.taritalk.xyz" },
-  { id: "sydney", label: "Sydney (AU)", url: "https://wallet-query-au-01.nodes.taritalk.xyz" },
-  { id: "madrid", label: "Madrid (ES)", url: "https://wallet-query-es-01.nodes.taritalk.xyz" },
-  { id: "marseille", label: "Marseille (FR)", url: "https://wallet-query-fr-01.nodes.taritalk.xyz" },
-  { id: "turin", label: "Turin (IT)", url: "https://wallet-query-it-01.nodes.taritalk.xyz" },
-];
-
 /** The pseudo-id for "probe all nodes and use the fastest synced one" (the default). */
 export const AUTO_NODE_ID = "auto";
 
-export const DEFAULT_MAINNET_NODE_ID = MAINNET_NODES[0].id;
+/**
+ * The query nodes a user may pick between per network (Settings → Node). All serve the same
+ * base-node HTTP query API; the choice mainly steers scanning/sync (reads go straight to the node),
+ * since a broadcast propagates from whichever node receives it.
+ *
+ * Labelled by region only — no operator branding. Nodes across operators that share a city carry a
+ * numeric suffix so the two are distinguishable. A stored selection whose id is no longer listed
+ * (e.g. a decommissioned node) falls back to the network's default via `nodeById`. Networks absent
+ * from this map (nextnet, stagenet, igor) have a single fixed node from `RPC_URLS`.
+ */
+export const NODE_OPTIONS: Record<string, NodeOption[]> = {
+  mainnet: [
+    { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
+    { id: "ashburn", label: "Ashburn (US)", url: "https://wallet-query-us-01.nodes.taritalk.xyz" },
+    { id: "phoenix", label: "Phoenix (US)", url: "https://wallet-query-us-03.nodes.taritalk.xyz" },
+    { id: "batam", label: "Batam (ID)", url: "https://wallet-query-id-01.nodes.taritalk.xyz" },
+    { id: "kulai", label: "Kulai (MY)", url: "https://wallet-query-my-01.nodes.taritalk.xyz" },
+    { id: "mumbai", label: "Mumbai (IN)", url: "https://wallet-query-in-01.nodes.taritalk.xyz" },
+    { id: "sydney", label: "Sydney (AU)", url: "https://wallet-query-au-01.nodes.taritalk.xyz" },
+    { id: "madrid", label: "Madrid (ES)", url: "https://wallet-query-es-01.nodes.taritalk.xyz" },
+    { id: "marseille", label: "Marseille (FR)", url: "https://wallet-query-fr-01.nodes.taritalk.xyz" },
+    { id: "turin", label: "Turin (IT)", url: "https://wallet-query-it-01.nodes.taritalk.xyz" },
+    // Second operator (supportxtm). Browser-usable over HTTPS on 443, CORS "*". The listed :17232
+    // port is plain HTTP and unusable from an HTTPS page.
+    { id: "sx-singapore", label: "Singapore (SG)", url: "https://node-singapore.supportxtm.com" },
+    { id: "sx-london", label: "London (GB)", url: "https://node-london.supportxtm.com" },
+    { id: "sx-tokyo", label: "Tokyo (JP)", url: "https://node-tokyo.supportxtm.com" },
+    { id: "sx-osaka", label: "Osaka (JP)", url: "https://node-osaka.supportxtm.com" },
+    { id: "sx-jakarta", label: "Jakarta (ID)", url: "https://node-jakarta.supportxtm.com" },
+    { id: "sx-saopaulo", label: "São Paulo (BR)", url: "https://node-saopaulo.supportxtm.com" },
+    { id: "sx-sydney", label: "Sydney (AU) 2", url: "https://node-sydney.supportxtm.com" },
+    { id: "sx-mumbai", label: "Mumbai (IN) 2", url: "https://node-mumbai.supportxtm.com" },
+  ],
+  esmeralda: [
+    { id: "esmeralda", label: "Esmeralda (rpc.esmeralda.tari.com)", url: "https://rpc.esmeralda.tari.com" },
+    { id: "sx-singapore", label: "Singapore (SG)", url: "https://node-singapore-testnet.supportxtm.com" },
+    { id: "sx-london", label: "London (GB)", url: "https://node-london-testnet.supportxtm.com" },
+    { id: "sx-tokyo", label: "Tokyo (JP)", url: "https://node-tokyo-testnet.supportxtm.com" },
+    { id: "sx-osaka", label: "Osaka (JP)", url: "https://node-osaka-testnet.supportxtm.com" },
+    { id: "sx-jakarta", label: "Jakarta (ID)", url: "https://node-jakarta-testnet.supportxtm.com" },
+    { id: "sx-saopaulo", label: "São Paulo (BR)", url: "https://node-saopaulo-testnet.supportxtm.com" },
+    { id: "sx-sydney", label: "Sydney (AU)", url: "https://node-sydney-testnet.supportxtm.com" },
+    { id: "sx-mumbai", label: "Mumbai (IN)", url: "https://node-mumbai-testnet.supportxtm.com" },
+  ],
+};
+
+/** The selectable nodes for `network`, or `[]` when it has a single fixed node. */
+export function nodesForNetwork(network: string): NodeOption[] {
+  return NODE_OPTIONS[network] ?? [];
+}
+
+/** A node by id within a network, falling back to that network's default (first) node. */
+export function nodeById(network: string, id: string): NodeOption | null {
+  const list = nodesForNetwork(network);
+  return list.find((n) => n.id === id) ?? list[0] ?? null;
+}
 
 /** One node's probe result: whether it answered, how quickly, and the tip height it reported. */
 export interface NodeProbe {
-  node: MainnetNode;
+  node: NodeOption;
   ok: boolean;
   latencyMs: number;
   tipHeight: number;
@@ -93,10 +125,10 @@ export async function pingNode(url: string, timeoutMs = 4000): Promise<{ ok: boo
   }
 }
 
-/** Times `/get_tip_info` against every MainNet node in parallel (see [`pingNode`]). */
-export async function probeMainnetNodes(timeoutMs = 4000): Promise<NodeProbe[]> {
+/** Times `/get_tip_info` against every node of `network` in parallel (see [`pingNode`]). */
+export async function probeNodes(network: string, timeoutMs = 4000): Promise<NodeProbe[]> {
   return Promise.all(
-    MAINNET_NODES.map(async (node): Promise<NodeProbe> => ({ node, ...(await pingNode(node.url, timeoutMs)) })),
+    nodesForNetwork(network).map(async (node): Promise<NodeProbe> => ({ node, ...(await pingNode(node.url, timeoutMs)) })),
   );
 }
 
@@ -115,59 +147,57 @@ export function selectFastestNode(probes: NodeProbe[], tolerance = 5): NodeProbe
 }
 
 /**
- * Probes every node and, on MainNet, repoints the query service at the fastest synced one. Returns
- * the winning probe (with its latency) for the UI, or `null` if none answered — in which case the
- * caller should leave the current base (the default node) in place.
+ * Probes every node of `network` and, if that network is the active one, repoints the query service
+ * at the fastest synced one. Returns the winning probe (with its latency) for the UI, or `null` if
+ * none answered — in which case the caller should leave the current base (the default) in place.
  */
-export async function selectFastestMainnetNode(timeoutMs = 4000): Promise<NodeProbe | null> {
-  const best = selectFastestNode(await probeMainnetNodes(timeoutMs));
-  if (best && rpcNetwork === "mainnet") {
+export async function selectFastestNodeFor(network: string, timeoutMs = 4000): Promise<NodeProbe | null> {
+  const best = selectFastestNode(await probeNodes(network, timeoutMs));
+  if (best && network === rpcNetwork) {
     rpcBase = best.node.url;
-    mainnetNodeId = best.node.id;
   }
   return best;
 }
 
-/** The chosen node for `id`, falling back to the default if the id is unknown (e.g. removed). */
-export function mainnetNodeById(id: string): MainnetNode {
-  return MAINNET_NODES.find((n) => n.id === id) ?? MAINNET_NODES[0];
-}
-
 let rpcBase: string | null = DEFAULT_RPC_URL;
 let rpcNetwork = "mainnet";
-/** Which MainNet node `configureRpcForNetwork` points at; only meaningful on MainNet. */
-let mainnetNodeId = DEFAULT_MAINNET_NODE_ID;
+/** The chosen node id per network ("auto" or a specific id); unset means auto/default. */
+const selectedNodeId: Record<string, string> = {};
 
-/** The MainNet query base for the current node choice. Other networks have one fixed node. */
-function baseForNetwork(network: string): string {
-  if (network === "mainnet") return mainnetNodeById(mainnetNodeId).url;
-  return RPC_URLS[network] ?? DEFAULT_RPC_URL;
+/** The query base for `network` given the current node selection. */
+function resolveBase(network: string): string {
+  const list = nodesForNetwork(network);
+  if (list.length === 0) return RPC_URLS[network] ?? DEFAULT_RPC_URL;
+  const sel = selectedNodeId[network] ?? AUTO_NODE_ID;
+  // Auto starts on the network's default node; a probe (`selectFastestNodeFor`) repoints it later.
+  if (sel === AUTO_NODE_ID) return list[0].url;
+  return (nodeById(network, sel) ?? list[0]).url;
 }
 
 /**
- * Records the user's MainNet node choice and, when MainNet is active, repoints the query service at
- * it. Set this before `configureRpcForNetwork` on load so the base comes up on the chosen node.
+ * Records the node choice for `network` and, when that network is active, repoints the query
+ * service at it. Set this before `configureRpcForNetwork` on load so the base comes up correctly.
  */
-export function setMainnetNodeId(id: string): void {
-  mainnetNodeId = mainnetNodeById(id).id;
-  if (rpcNetwork === "mainnet") {
-    rpcBase = mainnetNodeById(mainnetNodeId).url;
+export function setSelectedNodeId(network: string, id: string): void {
+  selectedNodeId[network] = id;
+  if (network === rpcNetwork) {
+    rpcBase = resolveBase(network);
   }
 }
 
-export function getMainnetNodeId(): string {
-  return mainnetNodeId;
+export function getSelectedNodeId(network: string): string {
+  return selectedNodeId[network] ?? AUTO_NODE_ID;
 }
 
 /**
- * Points every query and broadcast at `network`'s node. The gRPC bridge is a MainNet deployment,
- * so on any other network it is never used as a fallback: answering an Esmeralda wallet with
- * MainNet data would be worse than failing. On MainNet it honours the current node choice
- * (`setMainnetNodeId`).
+ * Points every query and broadcast at `network`'s node, honouring the current per-network node
+ * choice (`setSelectedNodeId`). The gRPC bridge is a MainNet deployment, so on any other network it
+ * is never used as a fallback: answering an Esmeralda wallet with MainNet data would be worse than
+ * failing.
  */
 export function configureRpcForNetwork(network: string): void {
   rpcNetwork = network;
-  rpcBase = baseForNetwork(network);
+  rpcBase = resolveBase(network);
 }
 
 export function getRpcNetwork(): string {

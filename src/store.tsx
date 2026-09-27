@@ -32,11 +32,12 @@ import {
   AUTO_NODE_ID,
   configureRpcForNetwork,
   getRpcBase,
-  mainnetNodeById,
+  nodeById,
+  nodesForNetwork,
   pingNode,
   rpcKernelMerkleProof,
-  selectFastestMainnetNode,
-  setMainnetNodeId,
+  selectFastestNodeFor,
+  setSelectedNodeId,
 } from "./lib/rpc";
 import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 
@@ -134,8 +135,10 @@ interface Persisted {
   /** Default fee-payment type for L2/Ootle transactions when a connected dApp doesn't enforce
    * one. "transparent" (unchanged behavior) unless the user opts in to "private". */
   feePrivacyDefault?: "private" | "transparent";
-  /** The selected MainNet query node id (see `MAINNET_NODES`). MainNet-only; other networks have a
-   * single fixed node. Absent = the default node. */
+  /** The selected query node id per network ("auto" or a specific id; see `NODE_OPTIONS`). Absent
+   * entries default to "auto". Migrated from the older MainNet-only `mainnetNode` field. */
+  nodeByNetwork?: Record<string, string>;
+  /** @deprecated superseded by `nodeByNetwork.mainnet`; still read on load for migration. */
   mainnetNode?: string;
   subAddresses?: SubAddress[];
   /**
@@ -324,8 +327,9 @@ interface Store {
   setFeePrivacyDefault: (v: "private" | "transparent") => void;
   /** The selected MainNet query node id. Only affects MainNet; changing it repoints scanning and
    * broadcasts at that node. See `MAINNET_NODES`. */
-  mainnetNode: string;
-  setMainnetNode: (id: string) => void;
+  /** The selected node id for the active network ("auto" or a specific id). */
+  selectedNode: string;
+  setSelectedNode: (id: string) => void;
   /** Live query-service connectivity for the status indicator. */
   nodeStatus: "checking" | "online" | "offline";
   /** The node currently in use (resolved from "auto", or the pinned one), null until known. */
@@ -387,7 +391,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [autoLockMinutes, setAutoLockMinutesState] = useState(5);
   const [feePrivacyDefault, setFeePrivacyDefaultState] = useState<"private" | "transparent">("transparent");
   // "auto" (probe all, use the fastest synced node) or a specific node id. Defaults to auto.
-  const [mainnetNode, setMainnetNodeState] = useState<string>(AUTO_NODE_ID);
+  // Per-network node choice ("auto" or a specific id); networks absent = auto.
+  const [nodeByNetwork, setNodeByNetwork] = useState<Record<string, string>>({});
+  // The choice for the active network, derived for the UI and the probe effect.
+  const selectedNode = network ? nodeByNetwork[network] ?? AUTO_NODE_ID : AUTO_NODE_ID;
   // Live query-service connectivity, for the status dot. "checking" while a probe is in flight.
   const [nodeStatus, setNodeStatus] = useState<"checking" | "online" | "offline">("checking");
   // The node actually in use (resolved from auto, or the pinned one) and its last measured latency.
@@ -489,13 +496,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (p.subAddresses) setSubAddresses(p.subAddresses);
         if (p.autoLockMinutes !== undefined) setAutoLockMinutesState(p.autoLockMinutes);
         if (p.feePrivacyDefault !== undefined) setFeePrivacyDefaultState(p.feePrivacyDefault);
-        // Apply the MainNet node choice before configureRpcForNetwork below, so the query base
-        // comes up on the chosen node rather than the default.
-        if (p.mainnetNode) {
-          setMainnetNodeState(p.mainnetNode);
+        // Apply the per-network node choices before configureRpcForNetwork below, so the query base
+        // comes up on the chosen node. Migrate the older MainNet-only `mainnetNode` field.
+        const savedNodes: Record<string, string> = { ...(p.nodeByNetwork ?? {}) };
+        if (p.mainnetNode && savedNodes.mainnet === undefined) savedNodes.mainnet = p.mainnetNode;
+        if (Object.keys(savedNodes).length > 0) {
+          setNodeByNetwork(savedNodes);
           // A pinned node points the base at it now; "auto" is left to the probe effect below,
           // which repoints to the fastest synced node once it has measured them.
-          if (p.mainnetNode !== AUTO_NODE_ID) setMainnetNodeId(p.mainnetNode);
+          for (const [net, id] of Object.entries(savedNodes)) {
+            if (id !== AUTO_NODE_ID) setSelectedNodeId(net, id);
+          }
         }
         if (p.spentHashes) {
           for (const [hash, commitment] of Object.entries(p.spentHashes)) {
@@ -565,7 +576,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         encBackup,
         autoLockMinutes,
         feePrivacyDefault,
-        mainnetNode,
+        nodeByNetwork,
         scannerUrl,
         scanThreads,
         birthdayMs,
@@ -596,7 +607,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addressInfo,
     autoLockMinutes,
     feePrivacyDefault,
-    mainnetNode,
+    nodeByNetwork,
     utxos,
     history,
     subAddresses,
@@ -816,21 +827,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setFeePrivacyDefaultState(v);
   }, []);
 
-  // A pinned node repoints the query service immediately so the next scan/refresh uses it; "auto"
-  // leaves the switch to the probe effect below (which picks the fastest synced node). On any
-  // network other than MainNet the query base is fixed, so this is stored but inert until MainNet.
-  const setMainnetNode = useCallback((id: string) => {
-    setMainnetNodeState(id);
-    if (id !== AUTO_NODE_ID) setMainnetNodeId(id);
-  }, []);
+  // Records the node choice for the active network. A pinned node repoints the query service
+  // immediately; "auto" is left to the probe effect below (which picks the fastest synced node).
+  const setSelectedNode = useCallback(
+    (id: string) => {
+      if (!network) return;
+      setNodeByNetwork((prev) => ({ ...prev, [network]: id }));
+      setSelectedNodeId(network, id);
+    },
+    [network],
+  );
 
   // Probes connectivity for the status dot and, in auto mode, repoints to the fastest synced node.
   // Runs on load, on a network switch, and whenever the node choice changes; also callable from the
-  // UI ("Re-test"). Off MainNet there is a single fixed node, so it just pings the current base.
+  // UI ("Re-test"). A network with no selectable nodes just pings its single fixed base.
   const refreshNodeStatus = useCallback(async () => {
     setNodeStatus("checking");
-    if (network === "mainnet" && mainnetNode === AUTO_NODE_ID) {
-      const best = await selectFastestMainnetNode();
+    const hasOptions = !!network && nodesForNetwork(network).length > 0;
+    if (network && hasOptions && selectedNode === AUTO_NODE_ID) {
+      const best = await selectFastestNodeFor(network);
       if (best) {
         setActiveNodeId(best.node.id);
         setActiveNodeLatencyMs(Math.round(best.latencyMs));
@@ -842,23 +857,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return;
     }
-    // Pinned MainNet node, or a non-MainNet network: ping whatever base is active.
+    // A pinned node, or a network with a single fixed node: ping whatever base is active.
     const base = getRpcBase();
     if (!base) {
       setNodeStatus("offline");
       return;
     }
     const r = await pingNode(base);
-    setActiveNodeId(network === "mainnet" ? mainnetNode : null);
+    setActiveNodeId(hasOptions ? selectedNode : null);
     setActiveNodeLatencyMs(r.ok ? Math.round(r.latencyMs) : null);
     setNodeStatus(r.ok ? "online" : "offline");
-  }, [network, mainnetNode]);
+  }, [network, selectedNode]);
 
   // Kick a probe once the wallet is ready and whenever the network or node choice changes.
   useEffect(() => {
     if (!ready || !network) return;
     void refreshNodeStatus();
-  }, [ready, network, mainnetNode, refreshNodeStatus]);
+  }, [ready, network, selectedNode, refreshNodeStatus]);
 
   const fundDemo = useCallback(
     (valueMicro: bigint) => {
@@ -1563,8 +1578,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setAutoLockMinutes,
     feePrivacyDefault,
     setFeePrivacyDefault,
-    mainnetNode,
-    setMainnetNode,
+    selectedNode,
+    setSelectedNode,
     nodeStatus,
     activeNodeId,
     activeNodeLatencyMs,

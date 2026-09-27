@@ -19,7 +19,7 @@ import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
 import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
-import { AUTO_NODE_ID, getRpcBase, MAINNET_NODES, mainnetNodeById } from "../lib/rpc";
+import { AUTO_NODE_ID, getRpcBase, nodeById, nodesForNetwork } from "../lib/rpc";
 import { networkLabel } from "../lib/tari";
 import { NetworkSwitch } from "./NetworkSwitch";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
@@ -676,24 +676,24 @@ function SettingsContent() {
           </p>
           <NetworkSwitch />
         </div>
-        {store.network === "mainnet" && (
+        {store.network && nodesForNetwork(store.network).length > 0 && (
           <div className="mt-4 border-t border-[var(--tari-border)] pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-[var(--tari-text)]">MainNet node</p>
+                <p className="text-[13px] font-semibold text-[var(--tari-text)]">Node</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
                   Which base node this wallet queries for scanning and broadcasts. Auto picks the
                   fastest node that is fully synced; or pin a specific one.
                 </p>
               </div>
               <select
-                value={store.mainnetNode}
-                onChange={(e) => store.setMainnetNode(e.target.value)}
-                aria-label="MainNet node"
+                value={store.selectedNode}
+                onChange={(e) => store.setSelectedNode(e.target.value)}
+                aria-label="Query node"
                 className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
               >
                 <option value={AUTO_NODE_ID}>Auto (fastest)</option>
-                {MAINNET_NODES.map((n) => (
+                {nodesForNetwork(store.network).map((n) => (
                   <option key={n.id} value={n.id}>
                     {n.label}
                   </option>
@@ -708,8 +708,9 @@ function SettingsContent() {
                   : store.nodeStatus === "offline"
                     ? "Not connected — no node responded"
                     : (() => {
-                        const name = store.activeNodeId ? mainnetNodeById(store.activeNodeId).label : "node";
-                        const auto = store.mainnetNode === AUTO_NODE_ID ? "Auto → " : "";
+                        const node = store.activeNodeId ? nodeById(store.network!, store.activeNodeId) : null;
+                        const name = node ? node.label : "node";
+                        const auto = store.selectedNode === AUTO_NODE_ID ? "Auto → " : "";
                         const ms = store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : "";
                         return `Connected: ${auto}${name}${ms}`;
                       })()}
