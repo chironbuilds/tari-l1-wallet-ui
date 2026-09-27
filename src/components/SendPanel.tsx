@@ -154,25 +154,23 @@ export function SendPanel() {
       });
       if (!out.accepted) {
         setStage("signed");
-        // "Already mined"/"already spent" means these inputs are already consumed on-chain (by this
-        // transaction in an earlier attempt, or by another) — they will never be spendable again, so
-        // drop them rather than let coin selection keep re-offering the same dead coins and loop on
-        // the same rejection. A rescan re-imports any real change/outputs.
+        // "Already mined"/"already spent" means at least one of the selected inputs is already
+        // consumed on-chain — but not necessarily all of them, so we must NOT blanket-drop the
+        // whole selection. Re-sync from the birthday instead: the scan drops only the genuinely
+        // spent output(s) and keeps the rest, giving the wallet its true UTXO set back.
         const inputsAlreadyConsumed = /MINED|SPENT|DOUBLE/i.test(out.result);
         if (inputsAlreadyConsumed) {
-          store.removeSpent(r.consumedIds);
+          void store.rescanFromBirthday();
+          setResult(null);
+          setStage("idle");
         }
         toast({
           tone: "error",
           title: `Node rejected (${out.result})`,
           message: inputsAlreadyConsumed
-            ? "Those coins were already spent on-chain — removed from your wallet. Try again with the rest."
+            ? "Some of those coins were already spent on-chain. Re-syncing your balance from the chain…"
             : out.detail.slice(0, 160),
         });
-        if (inputsAlreadyConsumed) {
-          setResult(null);
-          setStage("idle");
-        }
         return;
       }
       store.spendInputs(

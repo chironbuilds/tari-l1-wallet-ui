@@ -346,6 +346,8 @@ interface Store {
   setScannerUrl: (url: string) => void;
   startScan: (from: number, to: number) => void;
   stopScan: () => void;
+  /** Re-imports the true UTXO set from the birthday block (recovery after an already-spent reject). */
+  rescanFromBirthday: () => void;
   spendInputs: (consumedIds: string[], changeMicro: bigint, changeCommitmentHex: string | null) => void;
   removeSpent: (commitments: string[]) => void;
   notifyNewBlock: (height: number) => void;
@@ -1536,6 +1538,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stopRef.current = true;
   }, []);
 
+  // Re-syncs the wallet against the chain from the birthday block: re-imports every still-unspent
+  // output and drops only the ones the chain shows spent. Used to recover the true UTXO set after a
+  // broadcast is rejected because an input was already spent — the authoritative fix rather than
+  // guessing which of a transaction's inputs is the dead one.
+  const rescanFromBirthday = useCallback(async () => {
+    if (!wallet || scanningRef.current) return;
+    const t = await fetchChainTip();
+    if (!t) return;
+    setTipHeight(t.height);
+    setLastScannedHeight(null);
+    startScan(birthdayHeightRef.current ?? 1, t.height);
+  }, [wallet, startScan]);
+
   const totalMicro = useMemo(() => {
     return utxos.reduce((acc, u) => acc + BigInt(u.valueMicro), 0n);
   }, [utxos]);
@@ -1628,6 +1643,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setScannerUrl,
     startScan,
     stopScan,
+    rescanFromBirthday,
   };
 
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

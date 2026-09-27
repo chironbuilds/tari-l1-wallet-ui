@@ -108,15 +108,16 @@ export function BurnPanel() {
       });
       if (!out.accepted) {
         setStage("review");
-        // Inputs already consumed on-chain will never be spendable again — drop them so they are
-        // not re-offered and the burn does not loop on the same rejection.
+        // At least one selected input is already consumed on-chain, but maybe not all — re-sync from
+        // the birthday rather than blanket-dropping the whole selection, so only the genuinely spent
+        // output is removed and the rest are kept.
         const inputsAlreadyConsumed = /MINED|SPENT|DOUBLE/i.test(out.result);
-        if (inputsAlreadyConsumed) store.removeSpent(ids);
+        if (inputsAlreadyConsumed) void store.rescanFromBirthday();
         toast({
           tone: "error",
           title: `Node rejected the burn (${out.result})`,
           message: inputsAlreadyConsumed
-            ? "Those coins were already spent on-chain — removed from your wallet."
+            ? "Some of those coins were already spent on-chain. Re-syncing your balance from the chain…"
             : out.detail.slice(0, 160),
         });
         return;
