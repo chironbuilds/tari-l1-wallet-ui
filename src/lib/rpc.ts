@@ -39,13 +39,14 @@ export interface MainnetNode {
  * base-node HTTP query API; the choice mainly steers scanning/sync (reads go straight to the node),
  * since a broadcast propagates from whichever MainNet node receives it.
  *
- * The taritalk nodes only allow browser (CORS) requests from `https://universe.tari.mw`, so they
- * are reachable from the deployed wallet but not from a local dev origin.
+ * Nodes are labelled by operator/region only — no third-party branding. The alternate nodes allow
+ * browser (CORS) requests only from `https://universe.tari.mw`, so they are reachable from the
+ * deployed wallet but not from a local dev origin. A stored selection whose id is no longer listed
+ * (e.g. a decommissioned node) falls back to the default via `mainnetNodeById`.
  */
 export const MAINNET_NODES: MainnetNode[] = [
   { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
-  { id: "casablanca", label: "Casablanca (taritalk)", url: "https://wallet-query.taritalk.xyz" },
-  { id: "singapore", label: "Singapore (taritalk)", url: "https://wallet-query-sg.taritalk.xyz" },
+  { id: "ashburn", label: "Ashburn (US)", url: "https://wallet-query-us-01.nodes.taritalk.xyz" },
 ];
 
 export const DEFAULT_MAINNET_NODE_ID = MAINNET_NODES[0].id;
