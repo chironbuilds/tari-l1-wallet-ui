@@ -108,7 +108,17 @@ export function BurnPanel() {
       });
       if (!out.accepted) {
         setStage("review");
-        toast({ tone: "error", title: `Node rejected the burn (${out.result})`, message: out.detail.slice(0, 160) });
+        // Inputs already consumed on-chain will never be spendable again — drop them so they are
+        // not re-offered and the burn does not loop on the same rejection.
+        const inputsAlreadyConsumed = /MINED|SPENT|DOUBLE/i.test(out.result);
+        if (inputsAlreadyConsumed) store.removeSpent(ids);
+        toast({
+          tone: "error",
+          title: `Node rejected the burn (${out.result})`,
+          message: inputsAlreadyConsumed
+            ? "Those coins were already spent on-chain — removed from your wallet."
+            : out.detail.slice(0, 160),
+        });
         return;
       }
       store.spendInputs(ids, signed.changeValueMicro ?? 0n, signed.changeCommitmentHex ?? null);

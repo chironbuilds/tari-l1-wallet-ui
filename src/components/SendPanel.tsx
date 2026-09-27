@@ -154,11 +154,25 @@ export function SendPanel() {
       });
       if (!out.accepted) {
         setStage("signed");
+        // "Already mined"/"already spent" means these inputs are already consumed on-chain (by this
+        // transaction in an earlier attempt, or by another) — they will never be spendable again, so
+        // drop them rather than let coin selection keep re-offering the same dead coins and loop on
+        // the same rejection. A rescan re-imports any real change/outputs.
+        const inputsAlreadyConsumed = /MINED|SPENT|DOUBLE/i.test(out.result);
+        if (inputsAlreadyConsumed) {
+          store.removeSpent(r.consumedIds);
+        }
         toast({
           tone: "error",
           title: `Node rejected (${out.result})`,
-          message: out.detail.slice(0, 160),
+          message: inputsAlreadyConsumed
+            ? "Those coins were already spent on-chain — removed from your wallet. Try again with the rest."
+            : out.detail.slice(0, 160),
         });
+        if (inputsAlreadyConsumed) {
+          setResult(null);
+          setStage("idle");
+        }
         return;
       }
       store.spendInputs(

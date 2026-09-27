@@ -197,13 +197,20 @@ function TxDetail({ rec }: { rec: TxRecord }) {
         broadcastBaseUrl(store.nodeUrl, store.scannerUrl),
         rec.json,
       );
+      // "Already mined" on a re-broadcast means this transaction is already on-chain — it succeeded.
+      // Treat it as pending (a scan will confirm it) and drop its now-spent inputs, rather than
+      // marking it failed.
+      const alreadyOnChain = !out.accepted && /MINED|SPENT|DOUBLE/i.test(out.result);
       store.updateTx(rec.id, {
-        status: out.accepted ? "pending" : "failed",
+        status: out.accepted || alreadyOnChain ? "pending" : "failed",
         result: out.detail,
       });
+      if (alreadyOnChain && rec.inputCommitments?.length) {
+        store.removeSpent(rec.inputCommitments);
+      }
       toast({
-        tone: out.accepted ? "success" : "error",
-        title: out.accepted ? "Broadcast accepted" : `Rejected (${out.result})`,
+        tone: out.accepted || alreadyOnChain ? "success" : "error",
+        title: out.accepted ? "Broadcast accepted" : alreadyOnChain ? "Already on-chain" : `Rejected (${out.result})`,
         message: truncMiddle(out.detail, 50, 30),
       });
     } catch (e) {
