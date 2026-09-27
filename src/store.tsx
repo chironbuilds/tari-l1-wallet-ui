@@ -293,6 +293,8 @@ interface Store {
   scanL2PrivateFunds: () => Promise<number>;
   scan: ScanProgress | null;
   birthdayMs: number | null;
+  /** The wallet's birthday resolved to a block height — the floor for every scan. Null until known. */
+  birthdayHeight: number | null;
   lastScannedHeight: number | null;
   setWalletBirthday: (birthdayMs: number) => void;
   createWallet: (network: NetworkId, pin: string) => Promise<void>;
@@ -415,6 +417,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const [scan, setScan] = useState<ScanProgress | null>(null);
   const [birthdayMs, setBirthdayMsState] = useState<number | null>(null);
+  // The block height of the wallet's birthday — the floor for every scan, so nothing ever scans
+  // from genesis. Resolved from `birthdayMs` once and mirrored into a ref for `startScan` to read
+  // synchronously.
+  const [birthdayHeight, setBirthdayHeightState] = useState<number | null>(null);
+  const birthdayHeightRef = useRef<number | null>(null);
+  const setBirthdayHeight = useCallback((h: number | null) => {
+    birthdayHeightRef.current = h;
+    setBirthdayHeightState(h);
+  }, []);
   const [lastScannedHeight, setLastScannedHeight] = useState<number | null>(null);
   const [tipHeight, setTipHeight] = useState<number | null>(null);
   const [subAddresses, setSubAddresses] = useState<SubAddress[]>([]);
@@ -636,10 +647,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, [network]);
 
-  const setWalletBirthday = useCallback((ms: number) => {
-    setBirthdayMsState(ms);
-    setLastScannedHeight(null);
-  }, []);
+  const setWalletBirthday = useCallback(
+    (ms: number) => {
+      setBirthdayMsState(ms);
+      setBirthdayHeight(null); // re-resolve for the new birthday
+      setLastScannedHeight(null);
+    },
+    [setBirthdayHeight],
+  );
 
   /**
    * A new seed owns nothing that any saved chain state describes, on any network — the previous
@@ -679,8 +694,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // says where a wallet's history begins, and a wallet without one used to get no automatic
     // scanning whatsoever — not even tip polling.
     setBirthdayMsState(Date.now());
+    setBirthdayHeight(null);
     setLastScannedHeight(null);
-  }, []);
+  }, [setBirthdayHeight]);
 
   const restoreWallet = useCallback(
     async (hex: string, net: NetworkId, pin: string): Promise<string | null> => {
@@ -706,10 +722,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setBurns([]);
       // The cursor belongs to whichever wallet was here before; keeping it would skip straight
       // past this wallet's own history. Seed restores set a birthday right after this returns.
+      setBirthdayHeight(null);
       setLastScannedHeight(null);
       return null;
     },
-    [],
+    [setBirthdayHeight],
   );
 
   const forget = useCallback(() => {
@@ -1119,15 +1136,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const t = await fetchChainTip();
       if (cancelled || !t) return;
       setTipHeight(t.height);
-      let birthdayHeight = await findHeightForTimestamp(scannerUrl, birthdayMs, t.height);
-      if (birthdayHeight === null) {
+      let resolvedBirthdayHeight = await findHeightForTimestamp(scannerUrl, birthdayMs, t.height);
+      if (resolvedBirthdayHeight === null) {
         const blocksSinceBirthday = Math.floor(Math.max(0, Date.now() - birthdayMs) / 1000 / 120);
-        birthdayHeight = Math.max(1, t.height - blocksSinceBirthday * 4);
+        resolvedBirthdayHeight = Math.max(1, t.height - blocksSinceBirthday * 4);
       }
-      const resumeFrom = Math.max(1, (lastScannedHeight ?? birthdayHeight - 1) + 1);
+      setBirthdayHeight(resolvedBirthdayHeight);
+      const resumeFrom = Math.max(1, (lastScannedHeight ?? resolvedBirthdayHeight - 1) + 1);
       if (resumeFrom > t.height) return;
       const mw = await fetchMiddlewareTip(scannerUrl);
-      if (mw && mw.prunedHeight > 0 && birthdayHeight < mw.prunedHeight && resumeFrom < mw.prunedHeight) {
+      if (mw && mw.prunedHeight > 0 && resolvedBirthdayHeight < mw.prunedHeight && resumeFrom < mw.prunedHeight) {
         setHistory((h) =>
           [
             {
@@ -1270,6 +1288,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const startScan = useCallback(
     (from: number, to: number) => {
       if (!wallet || scanningRef.current) return;
+      // Never scan before the wallet's birthday block — there is nothing of ours below it, and a
+      // scan from genesis is enormous and pointless. The birthday is the hard floor for every scan,
+      // whatever `from` a caller (including the manual scan in Settings) asks for.
+      from = Math.max(from, birthdayHeightRef.current ?? 1);
+      if (from > to) return;
       scanningRef.current = true;
       stopRef.current = false;
       setScan({
@@ -1469,9 +1492,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // height and silently miss history. The poll keeps running either way, so the moment that
       // scan sets a cursor this takes over and follows the tip unaided.
       if (!birthdayMs) return;
-      const birthdayHeight = await findHeightForTimestamp(scannerUrl, birthdayMs, height);
-      if (birthdayHeight === null) return;
-      from = birthdayHeight - 1;
+      const resolvedBirthdayHeight = await findHeightForTimestamp(scannerUrl, birthdayMs, height);
+      if (resolvedBirthdayHeight === null) return;
+      setBirthdayHeight(resolvedBirthdayHeight);
+      from = resolvedBirthdayHeight - 1;
     }
     if (height > from) startScan(from + 1, height);
   }, [birthdayMs, scannerUrl, startScan]);
@@ -1560,6 +1584,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     scanL2PrivateFunds,
     scan,
     birthdayMs,
+    birthdayHeight,
     lastScannedHeight,
     setWalletBirthday,
     createWallet,

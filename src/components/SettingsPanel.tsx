@@ -234,10 +234,13 @@ function SettingsContent() {
     void fetchChainTip().then((t) => {
       if (!t) return;
       setTip(t.height);
-      setScanFrom(String(Math.max(1, t.height - 499)));
+      // Never below the wallet's birthday block — that is the earliest block that can hold our
+      // outputs, and the store floors every scan there anyway.
+      const floor = store.birthdayHeight ?? 1;
+      setScanFrom(String(Math.min(t.height, Math.max(floor, t.height - 499))));
       setScanTo(String(t.height));
     });
-  }, []);
+  }, [store.birthdayHeight]);
 
   async function revealPhrase() {
     if (revealWords) {
@@ -465,7 +468,14 @@ function SettingsContent() {
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Field label={`Scan from${tip ? ` — tip ${tip.toLocaleString()}` : ""}`}>
+          <Field
+            label={`Scan from${tip ? ` — tip ${tip.toLocaleString()}` : ""}`}
+            hint={
+              store.birthdayHeight
+                ? `Earliest: birthday block ${store.birthdayHeight.toLocaleString()} — scans never start below it.`
+                : undefined
+            }
+          >
             <TextInput
               value={scanFrom}
               onChange={(e) => setScanFrom(e.target.value.replace(/\D/g, ""))}
@@ -558,7 +568,9 @@ function SettingsContent() {
           {!store.scan || store.scan.done ? (
             <Button
               disabled={!scanFrom || !scanTo}
-              onClick={() => store.startScan(Number(scanFrom), Number(scanTo))}
+              onClick={() =>
+                store.startScan(Math.max(Number(scanFrom), store.birthdayHeight ?? 1), Number(scanTo))
+              }
             >
               <Radar size={15} /> Start scan
             </Button>
