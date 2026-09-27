@@ -47,9 +47,86 @@ export interface MainnetNode {
 export const MAINNET_NODES: MainnetNode[] = [
   { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
   { id: "ashburn", label: "Ashburn (US)", url: "https://wallet-query-us-01.nodes.taritalk.xyz" },
+  { id: "phoenix", label: "Phoenix (US)", url: "https://wallet-query-us-03.nodes.taritalk.xyz" },
+  { id: "batam", label: "Batam (ID)", url: "https://wallet-query-id-01.nodes.taritalk.xyz" },
+  { id: "kulai", label: "Kulai (MY)", url: "https://wallet-query-my-01.nodes.taritalk.xyz" },
+  { id: "mumbai", label: "Mumbai (IN)", url: "https://wallet-query-in-01.nodes.taritalk.xyz" },
+  { id: "sydney", label: "Sydney (AU)", url: "https://wallet-query-au-01.nodes.taritalk.xyz" },
+  { id: "madrid", label: "Madrid (ES)", url: "https://wallet-query-es-01.nodes.taritalk.xyz" },
+  { id: "marseille", label: "Marseille (FR)", url: "https://wallet-query-fr-01.nodes.taritalk.xyz" },
+  { id: "turin", label: "Turin (IT)", url: "https://wallet-query-it-01.nodes.taritalk.xyz" },
 ];
 
+/** The pseudo-id for "probe all nodes and use the fastest synced one" (the default). */
+export const AUTO_NODE_ID = "auto";
+
 export const DEFAULT_MAINNET_NODE_ID = MAINNET_NODES[0].id;
+
+/** One node's probe result: whether it answered, how quickly, and the tip height it reported. */
+export interface NodeProbe {
+  node: MainnetNode;
+  ok: boolean;
+  latencyMs: number;
+  tipHeight: number;
+}
+
+const nowMs = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/**
+ * Times a lightweight `/get_tip_info` against one node's base URL. A node that errors, times out,
+ * or is CORS-blocked (the taritalk nodes only allow `https://universe.tari.mw`, so from any other
+ * origin they all fail) comes back `ok: false`, latency `Infinity`.
+ */
+export async function pingNode(url: string, timeoutMs = 4000): Promise<{ ok: boolean; latencyMs: number; tipHeight: number }> {
+  const started = nowMs();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const r = await fetch(`${url}/get_tip_info`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!r.ok) return { ok: false, latencyMs: Infinity, tipHeight: 0 };
+    const j = (await r.json()) as { metadata?: { best_block_height?: unknown } };
+    const tipHeight = Number(j.metadata?.best_block_height ?? 0);
+    return { ok: tipHeight > 0, latencyMs: nowMs() - started, tipHeight };
+  } catch {
+    return { ok: false, latencyMs: Infinity, tipHeight: 0 };
+  }
+}
+
+/** Times `/get_tip_info` against every MainNet node in parallel (see [`pingNode`]). */
+export async function probeMainnetNodes(timeoutMs = 4000): Promise<NodeProbe[]> {
+  return Promise.all(
+    MAINNET_NODES.map(async (node): Promise<NodeProbe> => ({ node, ...(await pingNode(node.url, timeoutMs)) })),
+  );
+}
+
+/**
+ * The fastest node worth using: among those that answered and are within `tolerance` blocks of the
+ * highest tip anyone reported (so a fast but lagging node is never chosen over the real chain),
+ * the one with the lowest latency. `null` if nothing usable answered.
+ */
+export function selectFastestNode(probes: NodeProbe[], tolerance = 5): NodeProbe | null {
+  const usable = probes.filter((p) => p.ok);
+  if (usable.length === 0) return null;
+  const maxTip = Math.max(...usable.map((p) => p.tipHeight));
+  const current = usable.filter((p) => p.tipHeight >= maxTip - tolerance);
+  current.sort((a, b) => a.latencyMs - b.latencyMs);
+  return current[0];
+}
+
+/**
+ * Probes every node and, on MainNet, repoints the query service at the fastest synced one. Returns
+ * the winning probe (with its latency) for the UI, or `null` if none answered — in which case the
+ * caller should leave the current base (the default node) in place.
+ */
+export async function selectFastestMainnetNode(timeoutMs = 4000): Promise<NodeProbe | null> {
+  const best = selectFastestNode(await probeMainnetNodes(timeoutMs));
+  if (best && rpcNetwork === "mainnet") {
+    rpcBase = best.node.url;
+    mainnetNodeId = best.node.id;
+  }
+  return best;
+}
 
 /** The chosen node for `id`, falling back to the default if the id is unknown (e.g. removed). */
 export function mainnetNodeById(id: string): MainnetNode {

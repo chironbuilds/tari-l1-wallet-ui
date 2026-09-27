@@ -19,12 +19,12 @@ import { useStore } from "../store";
 import { downloadText, truncMiddle } from "../lib/format";
 import { exportSeedPhrase } from "../lib/cipherseed";
 import { fetchChainTip } from "../lib/explorer";
-import { getRpcBase, MAINNET_NODES } from "../lib/rpc";
+import { AUTO_NODE_ID, getRpcBase, MAINNET_NODES, mainnetNodeById } from "../lib/rpc";
 import { networkLabel } from "../lib/tari";
 import { NetworkSwitch } from "./NetworkSwitch";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { useToast } from "./toast";
-import { Badge, Button, Card, CopyButton, Field, Segmented, Switch, TextInput } from "./ui";
+import { Badge, Button, Card, CopyButton, Field, NodeStatusDot, Segmented, Switch, TextInput } from "./ui";
 import { connectedSites, revokeConnection, revokeViewAccess } from "../lib/dappBridge";
 import { forgetOrigin } from "../lib/dappRequests";
 import { detectedCores, maxWorkers, threadOptions } from "../lib/threads";
@@ -677,26 +677,51 @@ function SettingsContent() {
           <NetworkSwitch />
         </div>
         {store.network === "mainnet" && (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tari-border)] pt-4">
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-[var(--tari-text)]">MainNet node</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
-                Which base node this wallet queries for scanning and broadcasts. All are archival
-                MainNet nodes — switch if one is slow or unreachable.
-              </p>
+          <div className="mt-4 border-t border-[var(--tari-border)] pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-[var(--tari-text)]">MainNet node</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
+                  Which base node this wallet queries for scanning and broadcasts. Auto picks the
+                  fastest node that is fully synced; or pin a specific one.
+                </p>
+              </div>
+              <select
+                value={store.mainnetNode}
+                onChange={(e) => store.setMainnetNode(e.target.value)}
+                aria-label="MainNet node"
+                className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
+              >
+                <option value={AUTO_NODE_ID}>Auto (fastest)</option>
+                {MAINNET_NODES.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={store.mainnetNode}
-              onChange={(e) => store.setMainnetNode(e.target.value)}
-              aria-label="MainNet node"
-              className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
-            >
-              {MAINNET_NODES.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.label}
-                </option>
-              ))}
-            </select>
+            <div className="mt-2.5 flex items-center gap-2 text-[11px]">
+              <NodeStatusDot status={store.nodeStatus} />
+              <span className="text-zinc-500">
+                {store.nodeStatus === "checking"
+                  ? "Checking nodes…"
+                  : store.nodeStatus === "offline"
+                    ? "Not connected — no node responded"
+                    : (() => {
+                        const name = store.activeNodeId ? mainnetNodeById(store.activeNodeId).label : "node";
+                        const auto = store.mainnetNode === AUTO_NODE_ID ? "Auto → " : "";
+                        const ms = store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : "";
+                        return `Connected: ${auto}${name}${ms}`;
+                      })()}
+              </span>
+              <button
+                type="button"
+                onClick={() => store.refreshNodeStatus()}
+                className="ml-auto rounded-md px-2 py-0.5 text-[11px] text-zinc-500 underline decoration-dotted hover:text-[var(--tari-text)]"
+              >
+                Re-test
+              </button>
+            </div>
           </div>
         )}
       </Card>

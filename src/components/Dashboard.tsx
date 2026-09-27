@@ -22,7 +22,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { isLocked, useStore } from "../store";
 import { formatMicro, timeAgo, truncMiddle } from "../lib/format";
-import { ActionTiles, Button, Card, CopyButton, Logo } from "./ui";
+import { ActionTiles, Button, Card, CopyButton, Logo, NodeStatusDot } from "./ui";
 import { TowerBackground } from "./TowerBackground";
 import { BlockExplorerMini } from "./blocks/BlockExplorerMini";
 import { SendPanel } from "./SendPanel";
@@ -281,7 +281,17 @@ export function Dashboard() {
                 )}
               </p>
               <div className="mt-1 flex items-center justify-between gap-2">
-                <p className="truncate text-[11px] opacity-70" title={`${networkLabel(store.network)} balance`}>
+                <p
+                  className="flex min-w-0 items-center gap-1.5 truncate text-[11px] opacity-70"
+                  title={
+                    store.nodeStatus === "online"
+                      ? `Connected to node${store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : ""}`
+                      : store.nodeStatus === "offline"
+                        ? "Not connected to any node"
+                        : "Checking node…"
+                  }
+                >
+                  <NodeStatusDot status={store.nodeStatus} size={7} />
                   Available balance
                 </p>
                 <NetworkSwitch tone="card" />

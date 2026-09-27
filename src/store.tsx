@@ -29,9 +29,13 @@ import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subad
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
 import {
+  AUTO_NODE_ID,
   configureRpcForNetwork,
-  DEFAULT_MAINNET_NODE_ID,
+  getRpcBase,
+  mainnetNodeById,
+  pingNode,
   rpcKernelMerkleProof,
+  selectFastestMainnetNode,
   setMainnetNodeId,
 } from "./lib/rpc";
 import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
@@ -322,6 +326,14 @@ interface Store {
    * broadcasts at that node. See `MAINNET_NODES`. */
   mainnetNode: string;
   setMainnetNode: (id: string) => void;
+  /** Live query-service connectivity for the status indicator. */
+  nodeStatus: "checking" | "online" | "offline";
+  /** The node currently in use (resolved from "auto", or the pinned one), null until known. */
+  activeNodeId: string | null;
+  /** Last measured round-trip to the active node's `/get_tip_info`, ms. */
+  activeNodeLatencyMs: number | null;
+  /** Re-probe the nodes (re-pick the fastest in auto mode, or re-check the pinned one). */
+  refreshNodeStatus: () => void;
   fundDemo: (valueMicro: bigint) => void;
   addScannedOutput: (handle: WasmWalletOutput, minedHeight: number, maturityHeight: number, raw?: ScanOutput) => void;
   getHandle: (id: string) => WasmWalletOutput | undefined;
@@ -374,7 +386,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [lockedAddressHint, setLockedAddressHint] = useState<string | null>(null);
   const [autoLockMinutes, setAutoLockMinutesState] = useState(5);
   const [feePrivacyDefault, setFeePrivacyDefaultState] = useState<"private" | "transparent">("transparent");
-  const [mainnetNode, setMainnetNodeState] = useState<string>(DEFAULT_MAINNET_NODE_ID);
+  // "auto" (probe all, use the fastest synced node) or a specific node id. Defaults to auto.
+  const [mainnetNode, setMainnetNodeState] = useState<string>(AUTO_NODE_ID);
+  // Live query-service connectivity, for the status dot. "checking" while a probe is in flight.
+  const [nodeStatus, setNodeStatus] = useState<"checking" | "online" | "offline">("checking");
+  // The node actually in use (resolved from auto, or the pinned one) and its last measured latency.
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+  const [activeNodeLatencyMs, setActiveNodeLatencyMs] = useState<number | null>(null);
   // Stashes the just-loaded persisted record while locked, so unlock() can finish the restore the
   // mount effect deferred instead of re-reading (and re-trusting) localStorage a second time.
   const pendingPersistedRef = useRef<Persisted | null>(null);
@@ -475,7 +493,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // comes up on the chosen node rather than the default.
         if (p.mainnetNode) {
           setMainnetNodeState(p.mainnetNode);
-          setMainnetNodeId(p.mainnetNode);
+          // A pinned node points the base at it now; "auto" is left to the probe effect below,
+          // which repoints to the fastest synced node once it has measured them.
+          if (p.mainnetNode !== AUTO_NODE_ID) setMainnetNodeId(p.mainnetNode);
         }
         if (p.spentHashes) {
           for (const [hash, commitment] of Object.entries(p.spentHashes)) {
@@ -796,13 +816,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setFeePrivacyDefaultState(v);
   }, []);
 
-  // Repoints the query service immediately so the next scan/refresh uses the chosen node. On any
-  // network other than MainNet this is stored but has no effect until MainNet is active (the query
-  // base is fixed per non-MainNet network).
+  // A pinned node repoints the query service immediately so the next scan/refresh uses it; "auto"
+  // leaves the switch to the probe effect below (which picks the fastest synced node). On any
+  // network other than MainNet the query base is fixed, so this is stored but inert until MainNet.
   const setMainnetNode = useCallback((id: string) => {
     setMainnetNodeState(id);
-    setMainnetNodeId(id);
+    if (id !== AUTO_NODE_ID) setMainnetNodeId(id);
   }, []);
+
+  // Probes connectivity for the status dot and, in auto mode, repoints to the fastest synced node.
+  // Runs on load, on a network switch, and whenever the node choice changes; also callable from the
+  // UI ("Re-test"). Off MainNet there is a single fixed node, so it just pings the current base.
+  const refreshNodeStatus = useCallback(async () => {
+    setNodeStatus("checking");
+    if (network === "mainnet" && mainnetNode === AUTO_NODE_ID) {
+      const best = await selectFastestMainnetNode();
+      if (best) {
+        setActiveNodeId(best.node.id);
+        setActiveNodeLatencyMs(Math.round(best.latencyMs));
+        setNodeStatus("online");
+      } else {
+        setActiveNodeId(null);
+        setActiveNodeLatencyMs(null);
+        setNodeStatus("offline");
+      }
+      return;
+    }
+    // Pinned MainNet node, or a non-MainNet network: ping whatever base is active.
+    const base = getRpcBase();
+    if (!base) {
+      setNodeStatus("offline");
+      return;
+    }
+    const r = await pingNode(base);
+    setActiveNodeId(network === "mainnet" ? mainnetNode : null);
+    setActiveNodeLatencyMs(r.ok ? Math.round(r.latencyMs) : null);
+    setNodeStatus(r.ok ? "online" : "offline");
+  }, [network, mainnetNode]);
+
+  // Kick a probe once the wallet is ready and whenever the network or node choice changes.
+  useEffect(() => {
+    if (!ready || !network) return;
+    void refreshNodeStatus();
+  }, [ready, network, mainnetNode, refreshNodeStatus]);
 
   const fundDemo = useCallback(
     (valueMicro: bigint) => {
@@ -1509,6 +1565,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setFeePrivacyDefault,
     mainnetNode,
     setMainnetNode,
+    nodeStatus,
+    activeNodeId,
+    activeNodeLatencyMs,
+    refreshNodeStatus,
     fundDemo,
     addScannedOutput,
     removeSpent,

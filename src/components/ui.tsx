@@ -370,6 +370,33 @@ export interface ActionTile {
 }
 
 /** The wallet column's primary actions: equal-width tiles, so the row never runs past the column. */
+/** A small connectivity dot: green (online), red (offline), amber pulsing (checking). */
+export function NodeStatusDot({
+  status,
+  size = 8,
+}: {
+  status: "checking" | "online" | "offline";
+  size?: number;
+}) {
+  const color =
+    status === "online" ? "var(--st-green)" : status === "offline" ? "var(--st-red)" : "var(--st-amber)";
+  const label = status === "online" ? "Connected" : status === "offline" ? "Not connected" : "Checking connection";
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={`inline-block shrink-0 rounded-full${status === "checking" ? " animate-pulse" : ""}`}
+      style={{
+        width: size,
+        height: size,
+        background: color,
+        boxShadow: status === "online" ? `0 0 6px ${color}` : undefined,
+      }}
+    />
+  );
+}
+
 export function ActionTiles({ actions }: { actions: ActionTile[] }) {
   return (
     <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }}>
