@@ -1,3 +1,4 @@
+import type { BurnOutputProof } from "@chironbuilder/ootle-sdk";
 import type { ScanBlock, ScanOutput } from "./scanner";
 import type { SubmitOutcome } from "./tari";
 
@@ -45,41 +46,23 @@ export const AUTO_NODE_ID = "auto";
  * Labelled by region only — no operator branding. Nodes across operators that share a city carry a
  * numeric suffix so the two are distinguishable. A stored selection whose id is no longer listed
  * (e.g. a decommissioned node) falls back to the network's default via `nodeById`. Networks absent
- * from this map (nextnet, stagenet, igor) have a single fixed node from `RPC_URLS`.
+ * from this map (esmeralda, nextnet, stagenet, igor) have a single fixed node from `RPC_URLS`.
+ * Testnets use only Tari's own node: burns and claims need its current API (e.g. the burn output
+ * proof endpoint Ootle 0.42 claims are built from), which third-party nodes may lag behind.
  */
 export const NODE_OPTIONS: Record<string, NodeOption[]> = {
   mainnet: [
     { id: "tari", label: "Tari (rpc.tari.com)", url: DEFAULT_RPC_URL },
-    { id: "ashburn", label: "Ashburn (US)", url: "https://wallet-query-us-01.nodes.taritalk.xyz" },
-    { id: "phoenix", label: "Phoenix (US)", url: "https://wallet-query-us-03.nodes.taritalk.xyz" },
-    { id: "batam", label: "Batam (ID)", url: "https://wallet-query-id-01.nodes.taritalk.xyz" },
-    { id: "kulai", label: "Kulai (MY)", url: "https://wallet-query-my-01.nodes.taritalk.xyz" },
-    { id: "mumbai", label: "Mumbai (IN)", url: "https://wallet-query-in-01.nodes.taritalk.xyz" },
-    { id: "sydney", label: "Sydney (AU)", url: "https://wallet-query-au-01.nodes.taritalk.xyz" },
-    { id: "madrid", label: "Madrid (ES)", url: "https://wallet-query-es-01.nodes.taritalk.xyz" },
-    { id: "marseille", label: "Marseille (FR)", url: "https://wallet-query-fr-01.nodes.taritalk.xyz" },
-    { id: "turin", label: "Turin (IT)", url: "https://wallet-query-it-01.nodes.taritalk.xyz" },
-    // Second operator (supportxtm). Browser-usable over HTTPS on 443, CORS "*". The listed :17232
-    // port is plain HTTP and unusable from an HTTPS page.
+    // supportxtm. Browser-usable over HTTPS on 443, CORS "*". The listed :17232 port is plain HTTP
+    // and unusable from an HTTPS page.
     { id: "sx-singapore", label: "Singapore (SG)", url: "https://node-singapore.supportxtm.com" },
     { id: "sx-london", label: "London (GB)", url: "https://node-london.supportxtm.com" },
     { id: "sx-tokyo", label: "Tokyo (JP)", url: "https://node-tokyo.supportxtm.com" },
     { id: "sx-osaka", label: "Osaka (JP)", url: "https://node-osaka.supportxtm.com" },
     { id: "sx-jakarta", label: "Jakarta (ID)", url: "https://node-jakarta.supportxtm.com" },
     { id: "sx-saopaulo", label: "São Paulo (BR)", url: "https://node-saopaulo.supportxtm.com" },
-    { id: "sx-sydney", label: "Sydney (AU) 2", url: "https://node-sydney.supportxtm.com" },
-    { id: "sx-mumbai", label: "Mumbai (IN) 2", url: "https://node-mumbai.supportxtm.com" },
-  ],
-  esmeralda: [
-    { id: "esmeralda", label: "Esmeralda (rpc.esmeralda.tari.com)", url: "https://rpc.esmeralda.tari.com" },
-    { id: "sx-singapore", label: "Singapore (SG)", url: "https://node-singapore-testnet.supportxtm.com" },
-    { id: "sx-london", label: "London (GB)", url: "https://node-london-testnet.supportxtm.com" },
-    { id: "sx-tokyo", label: "Tokyo (JP)", url: "https://node-tokyo-testnet.supportxtm.com" },
-    { id: "sx-osaka", label: "Osaka (JP)", url: "https://node-osaka-testnet.supportxtm.com" },
-    { id: "sx-jakarta", label: "Jakarta (ID)", url: "https://node-jakarta-testnet.supportxtm.com" },
-    { id: "sx-saopaulo", label: "São Paulo (BR)", url: "https://node-saopaulo-testnet.supportxtm.com" },
-    { id: "sx-sydney", label: "Sydney (AU)", url: "https://node-sydney-testnet.supportxtm.com" },
-    { id: "sx-mumbai", label: "Mumbai (IN)", url: "https://node-mumbai-testnet.supportxtm.com" },
+    { id: "sx-sydney", label: "Sydney (AU)", url: "https://node-sydney.supportxtm.com" },
+    { id: "sx-mumbai", label: "Mumbai (IN)", url: "https://node-mumbai.supportxtm.com" },
   ],
 };
 
@@ -106,8 +89,7 @@ const nowMs = (): number => (typeof performance !== "undefined" ? performance.no
 
 /**
  * Times a lightweight `/get_tip_info` against one node's base URL. A node that errors, times out,
- * or is CORS-blocked (the taritalk nodes only allow `https://universe.tari.mw`, so from any other
- * origin they all fail) comes back `ok: false`, latency `Infinity`.
+ * or is CORS-blocked comes back `ok: false`, latency `Infinity`.
  */
 export async function pingNode(url: string, timeoutMs = 4000): Promise<{ ok: boolean; latencyMs: number; tipHeight: number }> {
   const started = nowMs();
@@ -665,24 +647,18 @@ export async function rpcSubmit(transactionJson: string): Promise<SubmitOutcome>
 }
 
 /**
- * The kernel merkle proof an Ootle burn claim needs, or null while the kernel is not yet in a
- * block (the node answers 404 until it is). Looked up by the kernel's excess signature.
+ * The proof an Ootle burn claim needs (Ootle 0.42+, tari-ootle#2709): the burn output and its
+ * inclusion in its block's `block_output_mr`, as the node's `BurnOutputProof`. Null while the burn
+ * is not yet in a block (the node answers 404 until it is). Looked up by the burn's commitment.
  */
-export async function rpcKernelMerkleProof(
-  nonceHex: string,
-  signatureHex: string,
-  signal?: AbortSignal,
-): Promise<{ block_hash: string; encoded_merkle_proof: string; leaf_index: number; block_height: number | null } | null> {
+export async function rpcBurnOutputProof(commitmentHex: string, signal?: AbortSignal): Promise<BurnOutputProof | null> {
   const base = requireBase();
-  const q = new URLSearchParams({ excess_sig_public_nonce: nonceHex, excess_sig_signature: signatureHex });
-  const r = await fetch(`${base}/generate_kernel_merkle_proof?${q}`, { signal });
+  const q = new URLSearchParams({ commitment: commitmentHex });
+  const r = await fetch(`${base}/generate_burn_output_proof?${q}`, { signal });
   if (r.status === 404) return null;
-  if (!r.ok) throw new Error(`rpc /generate_kernel_merkle_proof ${r.status}: ${(await r.text()).slice(0, 140)}`);
-  const j = (await r.json()) as Record<string, unknown>;
-  return {
-    block_hash: String(j.block_hash),
-    encoded_merkle_proof: String(j.encoded_merkle_proof),
-    leaf_index: Number(j.leaf_index),
-    block_height: j.block_height == null ? null : Number(j.block_height),
-  };
+  if (r.status === 410) throw new Error("This node has pruned the burn's block; use an archival node to claim it.");
+  if (!r.ok) throw new Error(`rpc /generate_burn_output_proof ${r.status}: ${(await r.text()).slice(0, 140)}`);
+  const j = (await r.json()) as { proof?: BurnOutputProof };
+  if (!j.proof?.output) throw new Error("rpc /generate_burn_output_proof returned no proof");
+  return j.proof;
 }

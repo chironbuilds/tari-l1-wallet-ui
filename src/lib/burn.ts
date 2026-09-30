@@ -1,5 +1,10 @@
 import type { WasmSignedBurn } from "@chironbuilder/tari-l1-wasm";
-import { assembleBurnClaimProof, type BurnClaimProofContents, type L1BurnProofParts } from "@chironbuilder/ootle-sdk";
+import {
+  assembleBurnClaimProof,
+  type BurnClaimProofContents,
+  type BurnOutputProof,
+  type L1BurnProofParts,
+} from "@chironbuilder/ootle-sdk";
 import type { NetworkId } from "./tari";
 
 /**
@@ -15,7 +20,7 @@ export function burnClaimableNow(network: NetworkId | null): boolean {
 /**
  * Where a burn is in its life:
  * - `broadcast`: accepted by a node, not yet in a block.
- * - `mined`: in a block; the kernel merkle proof is stored and the claim is waiting on L1
+ * - `mined`: in a block; the output proof is stored and the claim is waiting on L1
  *   confirmations (validators only accept a well-confirmed burn).
  * - `claiming`: a claim transaction is in flight on Ootle.
  * - `claimed`: minted on Ootle.
@@ -54,6 +59,9 @@ export interface BurnRecord {
   parts: StoredBurnParts;
   /** The activity entry for the L1 transaction. */
   historyId: string;
+  /** The burn output's inclusion proof (`/generate_burn_output_proof`), once it is mined. */
+  outputProof?: BurnOutputProof;
+  /** The kernel merkle proof claims used before Ootle 0.42; no longer claimable, kept only so old records load. */
   merkle?: { block_hash: string; encoded_merkle_proof: string; leaf_index: number };
   minedHeight?: number;
   claimTxId?: string;
@@ -92,21 +100,13 @@ function toSdkParts(p: StoredBurnParts): L1BurnProofParts {
     senderOffsetPublicKeyHex: p.senderOffsetPublicKeyHex,
     encryptedDataHex: p.encryptedDataHex,
     amount: BigInt(p.amountMicro),
-    kernel: {
-      version: p.kernel.version,
-      fee: BigInt(p.kernel.feeMicro),
-      lockHeight: BigInt(p.kernel.lockHeight),
-      excessHex: p.kernel.excessHex,
-      nonceHex: p.kernel.nonceHex,
-      signatureHex: p.kernel.signatureHex,
-    },
   };
 }
 
-/** The claimable proof, once the burn has a merkle proof. */
+/** The claimable proof, once the burn has its output proof. */
 export function claimProofFor(rec: BurnRecord): BurnClaimProofContents | null {
-  if (!rec.merkle) return null;
-  return assembleBurnClaimProof(toSdkParts(rec.parts), rec.merkle);
+  if (!rec.outputProof) return null;
+  return assembleBurnClaimProof(toSdkParts(rec.parts), rec.outputProof);
 }
 
 /**

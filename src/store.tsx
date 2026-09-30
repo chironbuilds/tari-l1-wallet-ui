@@ -35,7 +35,7 @@ import {
   nodeById,
   nodesForNetwork,
   pingNode,
-  rpcKernelMerkleProof,
+  rpcBurnOutputProof,
   selectFastestNodeFor,
   setSelectedNodeId,
 } from "./lib/rpc";
@@ -1073,25 +1073,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const claimBurnNow = useCallback((id: string) => claimBurn(id, true), [claimBurn]);
 
   /**
-   * Moves each burn along: a broadcast burn is mined once its kernel has a merkle proof, and a
+   * Moves each burn along: a broadcast burn is mined once the node has its output proof, and a
    * mined burn to this wallet's own account is claimed automatically, retried on a slow cadence
    * because validators only accept it once the L1 block is well confirmed.
    */
   const advanceBurns = useCallback(async () => {
     for (const rec of burnsRef.current) {
-      const needsProof = rec.status === "broadcast" || (rec.status === "external" && !rec.merkle);
+      // A burn mined before Ootle 0.42 has only a kernel proof, which claims no longer use; it
+      // fetches its output proof like a new one.
+      const needsProof =
+        rec.status === "broadcast" || ((rec.status === "external" || rec.status === "mined") && !rec.outputProof);
       if (needsProof) {
         try {
-          const merkle = await rpcKernelMerkleProof(rec.parts.kernel.nonceHex, rec.parts.kernel.signatureHex);
-          if (merkle) {
-            const { block_height, ...proof } = merkle;
+          const proof = await rpcBurnOutputProof(rec.parts.commitmentHex);
+          if (proof) {
+            const height = proof.block_height == null ? undefined : Number(proof.block_height);
             setBurns((b) =>
               b.map((r) =>
                 r.id === rec.id
                   ? {
                       ...r,
-                      merkle: proof,
-                      minedHeight: block_height ?? undefined,
+                      outputProof: proof,
+                      minedHeight: height ?? r.minedHeight,
                       status: r.status === "external" ? "external" : "mined",
                       // Counts as an attempt so the first claim waits for the block to settle.
                       lastAttemptAt: Date.now(),
@@ -1118,7 +1121,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     (r) =>
       r.status === "broadcast" ||
       (r.status === "mined" && r.toOwnAccount && burnClaimableNow(network)) ||
-      (r.status === "external" && !r.merkle),
+      ((r.status === "external" || r.status === "mined") && !r.outputProof),
   );
   useEffect(() => {
     if (!ready || !wallet || walletLocked || !burnsInFlight) return;

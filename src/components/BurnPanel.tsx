@@ -387,7 +387,7 @@ function stepIndex(rec: BurnRecord): number {
     case "claimed":
       return 2;
     case "external":
-      return rec.merkle ? 1 : 0;
+      return rec.outputProof ? 1 : 0;
     case "failed":
       return -1;
   }
@@ -410,7 +410,7 @@ function statusText(rec: BurnRecord, claimable: boolean): string {
     case "claimed":
       return `Claimed ${formatMicro(BigInt(rec.claimedMicro ?? "0"))} tTARI`;
     case "external":
-      return rec.merkle ? "Mined — proof ready to export" : "Waiting to be mined";
+      return rec.outputProof ? "Mined — proof ready to export" : "Waiting to be mined";
     case "failed":
       return "Rejected by the network";
   }

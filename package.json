@@ -17,7 +17,7 @@
     "server:local": "node server/index.js --bind 127.0.0.1 --host 127.0.0.1:18142 --tls 0"
   },
   "dependencies": {
-    "@chironbuilder/ootle-sdk": "^0.1.13",
+    "@chironbuilder/ootle-sdk": "^0.1.15",
     "@chironbuilder/tari-l1-wasm": "file:vendor/tari-l1-wasm",
     "@grpc/grpc-js": "^1.14.4",
     "@grpc/proto-loader": "^0.8.1",
@@ -26,7 +26,7 @@
     "@tari-project/ootle": "file:vendor/ootle-patched",
     "@tari-project/ootle-indexer": "^0.3.0",
     "@tari-project/ootle-secret-key-wallet": "^0.3.0",
-    "@tari-project/ootle-ts-bindings": "1.49.1",
+    "@tari-project/ootle-ts-bindings": "^1.55.0",
     "@tari-project/ootle-wasm": "file:vendor/ootle-wasm-patched",
     "@tari-project/tari-tower": "^0.2.1",
     "hls.js": "^1.7.1",
