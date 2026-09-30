@@ -126,23 +126,17 @@ export function L2Panel({
             onClick={() => onOpenPanel("l2shield")}
             disabled={!identity}
             title="Move public funds into a private output"
-            className="flex items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+            className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
           >
-            <span className="flex items-center gap-2 text-xs font-bold">
-              <EyeOff size={14} /> Shield
-            </span>
-            <span className="text-[10px] opacity-70">to private</span>
+            <EyeOff size={14} className="shrink-0" /> <span className="truncate">Shield</span>
           </button>
           <button
             onClick={() => onOpenPanel("l2unshield")}
             disabled={!identity}
             title="Bring private funds back into your public balance"
-            className="flex items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+            className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
           >
-            <span className="flex items-center gap-2 text-xs font-bold">
-              <Eye size={14} /> Unshield
-            </span>
-            <span className="text-[10px] opacity-70">to public</span>
+            <Eye size={14} className="shrink-0" /> <span className="truncate">Unshield</span>
           </button>
         </div>
 
