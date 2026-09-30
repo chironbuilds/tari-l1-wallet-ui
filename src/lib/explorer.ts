@@ -1,4 +1,5 @@
 import { getRpcNetwork, rpcTip } from "./rpc";
+import { t } from "../i18n";
 
 const EXPLORER = "https://textexplore.tari.com";
 
@@ -82,10 +83,10 @@ export const timeAgo = (timestamp: number): string => {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (days > 0) return `${days} day${days > 1 ? "s" : ""}`;
-  if (hours > 0) return `${hours} hour${hours > 1 ? "s" : ""}`;
-  if (minutes > 0) return `${minutes} min${minutes > 1 ? "s" : ""}`;
-  return `${seconds} sec${seconds > 1 ? "s" : ""}`;
+  if (days > 0) return t(days > 1 ? "ticker.daysAgo" : "ticker.dayAgo", { n: days });
+  if (hours > 0) return t(hours > 1 ? "ticker.hoursAgo" : "ticker.hourAgo", { n: hours });
+  if (minutes > 0) return t(minutes > 1 ? "ticker.minsAgo" : "ticker.minAgo", { n: minutes });
+  return t(seconds > 1 ? "ticker.secsAgo" : "ticker.secAgo", { n: seconds });
 };
 
 export const formatReward = (number: number): string => {

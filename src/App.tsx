@@ -1,4 +1,5 @@
 import { ToastProvider } from "./components/toast";
+import { LanguageProvider } from "./i18n";
 import { StoreProvider, useStore } from "./store";
 import { Dashboard } from "./components/Dashboard";
 import { Welcome } from "./components/Welcome";
@@ -13,11 +14,13 @@ function Gate() {
 
 export function App() {
   return (
-    <ToastProvider>
-      <StoreProvider>
-        <Gate />
-      </StoreProvider>
-    </ToastProvider>
+    <LanguageProvider>
+      <ToastProvider>
+        <StoreProvider>
+          <Gate />
+        </StoreProvider>
+      </ToastProvider>
+    </LanguageProvider>
   );
 }
 

@@ -5,6 +5,7 @@ import { formatMicro, truncMiddle } from "../lib/format";
 import { useStore } from "../store";
 import { useToast } from "./toast";
 import { Button, Field } from "./ui";
+import { useI18n } from "../i18n";
 
 /**
  * Claims a burn made from another wallet — typically `minotari_console_wallet`, which writes a
@@ -14,6 +15,7 @@ import { Button, Field } from "./ui";
 export function ClaimBurnPanel() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const [text, setText] = useState("");
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState<bigint | null>(null);
@@ -23,9 +25,9 @@ export function ClaimBurnPanel() {
     try {
       return { proof: parseConsoleWalletBurnProof(text), error: null };
     } catch (e) {
-      return { proof: null, error: e instanceof Error ? e.message : "Not a valid burn proof" };
+      return { proof: null, error: e instanceof Error ? e.message : t("claimburn.invalid") };
     }
-  }, [text]);
+  }, [text, t]);
 
   async function readFile(file: File) {
     setText(await file.text());
@@ -40,9 +42,9 @@ export function ClaimBurnPanel() {
       const { claimedAmount } = await account.claimBurn(parsed.proof);
       setClaimed(claimedAmount);
       store.refreshL2();
-      toast({ tone: "success", title: "Burn claimed", message: `${formatMicro(claimedAmount)} tTARI added to your private balance.` });
+      toast({ tone: "success", title: t("claimburn.claimedTitle"), message: t("claimburn.claimedMessage", { amount: formatMicro(claimedAmount) }) });
     } catch (e) {
-      toast({ tone: "error", title: "Claim not accepted", message: e instanceof Error ? e.message.slice(0, 200) : String(e) });
+      toast({ tone: "error", title: t("claimburn.notAccepted"), message: e instanceof Error ? e.message.slice(0, 200) : String(e) });
     } finally {
       setClaiming(false);
     }
@@ -56,15 +58,11 @@ export function ClaimBurnPanel() {
         <span className="grid size-9 place-items-center rounded-full bg-[var(--tari-purple)] text-white">
           <FileInput size={16} />
         </span>
-        Claim an L1 burn
+        {t("claimburn.title")}
       </h2>
-      <p className="mt-2 mb-5 text-xs leading-relaxed text-zinc-500">
-        Paste or upload a burn proof addressed to this Ootle account — for example a file from the Minotari
-        console wallet&apos;s <span className="font-mono">burn_proofs</span> folder. Burns made from this wallet
-        are claimed automatically.
-      </p>
+      <p className="mt-2 mb-5 text-xs leading-relaxed text-zinc-500">{t("claimburn.intro")}</p>
 
-      <Field label="Burn proof (JSON)" hint={parsed.error ?? undefined}>
+      <Field label={t("claimburn.proofLabel")} hint={parsed.error ?? undefined}>
         <textarea
           value={text}
           onChange={(e) => {
@@ -78,7 +76,7 @@ export function ClaimBurnPanel() {
         />
       </Field>
       <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-[var(--tari-text)] hover:opacity-80">
-        <Upload size={13} /> Upload file
+        <Upload size={13} /> {t("claimburn.upload")}
         <input
           type="file"
           accept="application/json,.json"
@@ -93,11 +91,11 @@ export function ClaimBurnPanel() {
       {parsed.proof && value !== null && (
         <dl className="mt-5 space-y-2.5 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-4 text-sm">
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500">Burned amount</dt>
+            <dt className="text-zinc-500">{t("claimburn.burnedAmount")}</dt>
             <dd className="tabular font-mono text-[var(--tari-text)]">{formatMicro(value)}</dd>
           </div>
           <div className="flex justify-between gap-4">
-            <dt className="text-zinc-500">Commitment</dt>
+            <dt className="text-zinc-500">{t("claimburn.commitment")}</dt>
             <dd className="font-mono text-[var(--tari-text)]">{truncMiddle(parsed.proof.claim_proof.commitment, 8, 6)}</dd>
           </div>
         </dl>
@@ -105,13 +103,13 @@ export function ClaimBurnPanel() {
 
       {!store.l2.identity && (
         <p className="mt-4 flex items-center gap-2 text-xs text-[var(--st-amber)]">
-          <TriangleAlert size={13} /> Waiting for the Ootle account to load.
+          <TriangleAlert size={13} /> {t("claimburn.waiting")}
         </p>
       )}
 
       {claimed !== null ? (
         <p className="mt-5 flex items-center gap-2 text-sm font-semibold text-[var(--st-green)]">
-          <Check size={16} /> Claimed {formatMicro(claimed)} tTARI
+          <Check size={16} /> {t("claimburn.claimedAmount", { amount: formatMicro(claimed) })}
         </p>
       ) : (
         <Button
@@ -121,7 +119,7 @@ export function ClaimBurnPanel() {
           loading={claiming}
           onClick={() => void claim()}
         >
-          {claiming ? "Claiming…" : "Claim"}
+          {claiming ? t("claimburn.claiming") : t("claimburn.claim")}
         </Button>
       )}
     </div>

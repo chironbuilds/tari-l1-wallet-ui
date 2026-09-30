@@ -7,8 +7,10 @@ import { formatMicro, humanizeFlag } from "../lib/format";
 import { useToast } from "./toast";
 import { copyText } from "../lib/format";
 import { Badge, Button, Card, Field, Segmented, TextInput } from "./ui";
+import { useI18n } from "../i18n";
 
 export function ReceivePanel() {
+  const { t } = useI18n();
   const store = useStore();
   const toast = useToast();
   const [useEmoji, setUseEmoji] = useState(false);
@@ -49,8 +51,8 @@ export function ReceivePanel() {
         onChange={(v) => setUseEmoji(v === "emoji")}
         className="mt-5"
         options={[
-          { value: "base58", label: "Base58" },
-          { value: "emoji", label: "Emoji ID" },
+          { value: "base58", label: t("receive.base58") },
+          { value: "emoji", label: t("receive.emojiId") },
         ]}
       />
 
@@ -59,7 +61,7 @@ export function ReceivePanel() {
       </p>
       {useEmoji && (
         <p className="mt-2 text-center text-[11px] text-zinc-500">
-          For the Tari Universe desktop app — this wallet's own Send only accepts Base58 or hex.
+          {t("receive.emojiNote")}
         </p>
       )}
 
@@ -71,18 +73,18 @@ export function ReceivePanel() {
           const ok = await copyText(display);
           if (ok) {
             setCopied(true);
-            toast({ tone: "success", title: "Address copied" });
+            toast({ tone: "success", title: t("receive.addressCopied") });
             setTimeout(() => setCopied(false), 2000);
           }
         }}
       >
         {copied ? <Check size={16} className="text-[var(--st-green)]" /> : <Copy size={16} />}
-        {copied ? "Copied" : "Copy address"}
+        {copied ? t("receive.copied") : t("receive.copyAddress")}
       </Button>
 
       <div className="mt-5 flex flex-wrap justify-center gap-2">
         <Badge tone={addr.isDual ? "green" : "red"}>
-          {addr.isDual ? "One-sided payments supported" : "Single address"}
+          {addr.isDual ? t("receive.oneSided") : t("receive.singleAddress")}
         </Badge>
         {addr.features.length > 0 && (
           <Badge tone="slate">{addr.features.map(humanizeFlag).join(" · ")}</Badge>
@@ -90,14 +92,13 @@ export function ReceivePanel() {
       </div>
 
       <p className="mt-4 text-center text-xs leading-relaxed text-zinc-500">
-        Scan with any Tari wallet, or share the address — senders can pay one-sidedly
-        without you being online.
+        {t("receive.scanNote")}
       </p>
 
       <details className="mt-6 w-full">
         <summary className="flex cursor-pointer items-center justify-between text-sm font-bold tracking-wide text-[var(--tari-text)] uppercase select-none">
           <span className="flex items-center gap-2">
-            <Coins size={15} className="text-[var(--st-green)]" /> Advanced: import a scanned output
+            <Coins size={15} className="text-[var(--st-green)]" /> {t("receive.advanced")}
           </span>
           <ChevronDown size={16} className="text-zinc-500" />
         </summary>
@@ -108,6 +109,7 @@ export function ReceivePanel() {
 }
 
 function ScannedImport() {
+  const { t } = useI18n();
   const store = useStore();
   const toast = useToast();
   const empty = {
@@ -134,26 +136,25 @@ function ScannedImport() {
   return (
     <div className="animate-fade-up mt-5 space-y-4">
       <p className="text-xs leading-relaxed text-zinc-500">
-        Recover a spendable output owned by this wallet from scanned chain data
-        (view-key / stealth DH decryption happens in WASM). Hex fields without 0x prefix.
+        {t("receive.importIntro")}
       </p>
-      <Field label="Commitment hex"><TextInput mono value={f.commitment} onChange={set("commitment")} /></Field>
-      <Field label="Encrypted data hex"><TextInput mono value={f.encryptedData} onChange={set("encryptedData")} /></Field>
-      <Field label="Sender offset public key hex"><TextInput mono value={f.senderOffsetPub} onChange={set("senderOffsetPub")} /></Field>
-      <Field label="Script hex"><TextInput mono value={f.script} onChange={set("script")} /></Field>
-      <Field label="Metadata signature hex"><TextInput mono value={f.metadataSig} onChange={set("metadataSig")} /></Field>
+      <Field label={t("receive.commitment")}><TextInput mono value={f.commitment} onChange={set("commitment")} /></Field>
+      <Field label={t("receive.encryptedData")}><TextInput mono value={f.encryptedData} onChange={set("encryptedData")} /></Field>
+      <Field label={t("receive.senderOffset")}><TextInput mono value={f.senderOffsetPub} onChange={set("senderOffsetPub")} /></Field>
+      <Field label={t("receive.script")}><TextInput mono value={f.script} onChange={set("script")} /></Field>
+      <Field label={t("receive.metadataSig")}><TextInput mono value={f.metadataSig} onChange={set("metadataSig")} /></Field>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Min value promise (µT)"><TextInput inputMode="numeric" value={f.minPromise} onChange={set("minPromise")} /></Field>
-        <Field label="Maturity (height)"><TextInput inputMode="numeric" value={f.maturity} onChange={set("maturity")} /></Field>
+        <Field label={t("receive.minPromise")}><TextInput inputMode="numeric" value={f.minPromise} onChange={set("minPromise")} /></Field>
+        <Field label={t("receive.maturity")}><TextInput inputMode="numeric" value={f.maturity} onChange={set("maturity")} /></Field>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Output type byte"><TextInput inputMode="numeric" value={f.outputType} onChange={set("outputType")} /></Field>
-        <Field label="Range proof type byte"><TextInput inputMode="numeric" value={f.rangeProofType} onChange={set("rangeProofType")} /></Field>
+        <Field label={t("receive.outputType")}><TextInput inputMode="numeric" value={f.outputType} onChange={set("outputType")} /></Field>
+        <Field label={t("receive.rangeProofType")}><TextInput inputMode="numeric" value={f.rangeProofType} onChange={set("rangeProofType")} /></Field>
       </div>
-      <Field label="Coinbase extra hex — optional"><TextInput mono value={f.coinbaseExtra} onChange={set("coinbaseExtra")} /></Field>
-      <Field label="Covenant hex — usually 00"><TextInput mono value={f.covenant} onChange={set("covenant")} /></Field>
-      <Field label="Range proof hex — required for spendable imports"><TextInput mono value={f.rangeProof} onChange={set("rangeProof")} /></Field>
-      <Field label="Output hash hex — chain hash for compact spending"><TextInput mono value={f.outputHash} onChange={set("outputHash")} /></Field>
+      <Field label={t("receive.coinbaseExtra")}><TextInput mono value={f.coinbaseExtra} onChange={set("coinbaseExtra")} /></Field>
+      <Field label={t("receive.covenant")}><TextInput mono value={f.covenant} onChange={set("covenant")} /></Field>
+      <Field label={t("receive.rangeProof")}><TextInput mono value={f.rangeProof} onChange={set("rangeProof")} /></Field>
+      <Field label={t("receive.outputHash")}><TextInput mono value={f.outputHash} onChange={set("outputHash")} /></Field>
       <Button
         variant="outline"
         className="w-full"
@@ -193,21 +194,20 @@ function ScannedImport() {
             });
             toast({
               tone: "success",
-              title: "Output recovered",
-              message: `Decrypted value: ${formatMicro(handle.valueMicro)} XTM — now spendable.`,
+              title: t("receive.recovered"),
+              message: t("receive.decryptedValue", { amount: formatMicro(handle.valueMicro) }),
             });
             setF(empty);
           } catch (e) {
             toast({
               tone: "error",
-              title: "Import failed",
-              message:
-                (e instanceof Error ? e.message : String(e)) + " — is this output yours?",
+              title: t("receive.importFailed"),
+              message: (e instanceof Error ? e.message : String(e)) + t("receive.isYours"),
             });
           }
         }}
       >
-        Decrypt & import output
+        {t("receive.decryptImport")}
       </Button>
     </div>
   );

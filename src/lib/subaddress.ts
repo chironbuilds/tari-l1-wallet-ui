@@ -13,6 +13,7 @@
 // sub-address it was sent to.
 
 import type { WasmTariAddress } from "@chironbuilder/tari-l1-wasm";
+import { t } from "../i18n";
 
 /** The address format's own ceiling on a payment id. */
 export const MAX_PAYMENT_ID_BYTES = 256;
@@ -53,11 +54,11 @@ export function checkLabel(label: string, existing: SubAddress[]): LabelProblem 
 export function describeLabelProblem(problem: LabelProblem): string {
   switch (problem) {
     case "empty":
-      return "Give it a name — the name is what senders' wallets attach to the payment.";
+      return t("sub.problemEmpty");
     case "too-long":
-      return `Keep it under ${MAX_LABEL_BYTES} bytes.`;
+      return t("sub.problemTooLong", { max: MAX_LABEL_BYTES });
     case "duplicate":
-      return "You already have a sub-address with that name.";
+      return t("sub.problemDuplicate");
   }
 }
 

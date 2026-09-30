@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { ArrowRight, Layers } from "lucide-react";
 import { Logo } from "./ui";
 import type { Layer } from "../store";
+import { t } from "../i18n";
 
 const DURATION_MS = 700;
 
@@ -34,7 +35,7 @@ export function LayerJump({ to, onDone }: LayerJumpProps) {
 
   const toL2 = to === "L2";
   const from = toL2 ? { label: "Tari L1", icon: <Logo size={16} /> } : { label: "Ootle L2", icon: <Layers size={16} /> };
-  const dest = toL2 ? { label: "Ootle L2", icon: <Layers size={16} /> } : { label: "Tari L1", icon: <Logo size={16} /> };
+  const dest = toL2 ? { label: t("ui.ootleL2"), icon: <Layers size={16} /> } : { label: t("ui.tariL1"), icon: <Logo size={16} /> };
 
   return (
     <div
@@ -42,7 +43,7 @@ export function LayerJump({ to, onDone }: LayerJumpProps) {
       style={{ background: "color-mix(in srgb, var(--tari-bg) 70%, transparent)" }}
       role="status"
       aria-live="polite"
-      aria-label={toL2 ? "Switching to Ootle, layer 2" : "Switching to Tari layer 1"}
+      aria-label={toL2 ? t("ui.switchingToL2") : t("ui.switchingToL1")}
     >
       <div className="un-card w-[280px] p-5">
         <div className="flex items-center justify-between text-xs font-semibold text-[var(--tari-text)]">

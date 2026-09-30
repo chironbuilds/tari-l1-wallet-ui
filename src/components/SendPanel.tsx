@@ -24,6 +24,7 @@ import {
 import { isSpendable, useStore } from "../store";
 import { useToast } from "./toast";
 import { Button, Field, Logo, TextInput } from "./ui";
+import { useI18n } from "../i18n";
 
 type Stage = "idle" | "review" | "building" | "signed" | "submitting";
 
@@ -37,6 +38,7 @@ interface BuildResult {
 export function SendPanel() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const symbol = coinSymbol(store.network);
 
   const [recipient, setRecipient] = useState("");
@@ -80,7 +82,7 @@ export function SendPanel() {
       for (const idx of selection.indices) {
         const rec = spendable[idx];
         const handle = store.getHandle(rec.id);
-        if (!handle) throw new Error(`UTXO ${rec.id.slice(0, 6)} unavailable`);
+        if (!handle) throw new Error(t("send.utxoUnavailable", { id: rec.id.slice(0, 6) }));
         ids.push(rec.id);
         builder.addInput(handle);
       }
@@ -105,7 +107,7 @@ export function SendPanel() {
       setStage("review");
       toast({
         tone: "error",
-        title: "Signing failed",
+        title: t("send.signingFailed"),
         message: e instanceof Error ? e.message : String(e),
       });
     }
@@ -131,7 +133,7 @@ export function SendPanel() {
     setResult(null);
     setStage("idle");
     setAmount("");
-    toast({ tone: "info", title: "Saved locally", message: "Broadcast later from Activity." });
+    toast({ tone: "info", title: t("send.savedLocally"), message: t("send.broadcastLater") });
   }
 
   async function broadcast(r: BuildResult) {
@@ -168,9 +170,9 @@ export function SendPanel() {
         }
         toast({
           tone: "error",
-          title: `Node rejected (${out.result})`,
+          title: t("send.nodeRejected", { result: out.result }),
           message: inputsAlreadyConsumed
-            ? "Some of those coins were already spent on-chain. Re-syncing your balance from the chain…"
+            ? t("send.alreadySpent")
             : out.detail.slice(0, 160),
         });
         return;
@@ -183,12 +185,12 @@ export function SendPanel() {
       setResult(null);
       setStage("idle");
       setAmount("");
-      toast({ tone: "success", title: "Transaction sent", message: truncMiddle(out.result, 60, 40) });
+      toast({ tone: "success", title: t("send.sent"), message: truncMiddle(out.result, 60, 40) });
     } catch (e) {
       setStage("signed");
       toast({
         tone: "error",
-        title: "Submission failed",
+        title: t("send.submissionFailed"),
         message: e instanceof Error ? e.message : String(e),
       });
     }
@@ -204,24 +206,24 @@ export function SendPanel() {
           >
             <ChevronLeft size={18} />
           </button>
-          Review transaction
+          {t("send.review")}
         </h2>
         <dl className="space-y-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-5 text-sm">
-          <Row label="To">
+          <Row label={t("send.to")}>
             <span className="break-all">{truncMiddle(parsed?.toBase58() ?? "", 18, 12)}</span>
           </Row>
-          <Row label="Amount">
+          <Row label={t("send.amount")}>
             <span className="tabular text-base font-bold text-[var(--tari-text)]">
               {formatMicro(amountMicro ?? 0n)} {symbol}
             </span>
           </Row>
-          <Row label="Est. fee">
+          <Row label={t("send.estFee")}>
             <span className="tabular">{selection ? formatMicro(selection.feeMicro) : "—"} {symbol}</span>
           </Row>
-          <Row label="Fee rate">{fpg?.toString()} µT/g</Row>
-          <Row label="Sender">
+          <Row label={t("send.feeRate")}>{fpg?.toString()} µT/g</Row>
+          <Row label={t("send.sender")}>
             <span className={revealSender ? "text-[var(--st-amber)]" : "text-[var(--st-green)]"}>
-              {revealSender ? "revealed to recipient" : "not disclosed"}
+              {revealSender ? t("send.senderRevealed") : t("send.senderHidden")}
             </span>
           </Row>
         </dl>
@@ -231,7 +233,7 @@ export function SendPanel() {
           loading={stage === "building"}
           onClick={() => void build()}
         >
-          {stage === "building" ? "Signing…" : "Confirm & sign"}
+          {stage === "building" ? t("send.signing") : t("send.confirmSign")}
         </Button>
       </div>
     );
@@ -243,27 +245,27 @@ export function SendPanel() {
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
           <Send size={15} />
         </span>
-        Send {symbol}
+        {t("send.title", { symbol })}
       </h2>
 
       <div className="space-y-4">
         <Field
-          label="Recipient address"
+          label={t("send.recipient")}
           hint={
             recipient.trim()
               ? parsed
                 ? addressValid
-                  ? "Valid one-sided address"
-                  : "This is a single address. One-sided payments need a dual address."
-                : "Invalid Tari address"
-              : "Base58 or hex"
+                  ? t("send.validOneSided")
+                  : t("send.singleAddress")
+                : t("send.invalidAddress")
+              : t("send.addressFormats")
           }
         >
           <div className="relative">
             <TextInput
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
-              placeholder="Paste address…"
+              placeholder={t("send.pastePlaceholder")}
               mono
               spellCheck={false}
               className="pr-10"
@@ -276,9 +278,9 @@ export function SendPanel() {
         </Field>
 
         <Field
-          label="Amount"
-          hint={`Max available: ${formatMicro(maxSpend)} ${symbol}${
-            selection && amountMicro ? ` · est. fee ${formatMicro(selection.feeMicro)} ${symbol}` : ""
+          label={t("send.amount")}
+          hint={`${t("send.maxAvailable", { amount: formatMicro(maxSpend), symbol })}${
+            selection && amountMicro ? t("send.estFeeSuffix", { amount: formatMicro(selection.feeMicro), symbol }) : ""
           }`}
         >
           <div className="relative">
@@ -297,7 +299,7 @@ export function SendPanel() {
               onClick={() => setAmount(formatMicro(maxSpend))}
               className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full border border-[var(--tari-border)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--tari-text)] uppercase hover:bg-[color-mix(in_srgb,var(--tari-text)_10%,transparent)]"
             >
-              Max
+              {t("send.max")}
             </button>
           </div>
         </Field>
@@ -311,8 +313,8 @@ export function SendPanel() {
               if (!next) {
                 toast({
                   tone: "info",
-                  title: "Hiding your address",
-                  message: "If you are sending to an exchange, please reveal your address — otherwise your deposit may not be credited.",
+                  title: t("send.hidingTitle"),
+                  message: t("send.hidingMessage"),
                 });
               }
               return next;
@@ -321,11 +323,11 @@ export function SendPanel() {
           className="flex w-full items-center justify-between gap-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-left"
         >
           <span className="min-w-0">
-            <span className="block text-sm text-[var(--tari-text)]">Reveal my address</span>
+            <span className="block text-sm text-[var(--tari-text)]">{t("send.revealMine")}</span>
             <span className="mt-0.5 block text-[11px] leading-relaxed text-zinc-500">
               {revealSender
-                ? "The recipient will see this payment came from you."
-                : "Private — the recipient will not know who paid."}
+                ? t("send.revealOn")
+                : t("send.revealOff")}
             </span>
           </span>
           <span
@@ -349,13 +351,12 @@ export function SendPanel() {
 
         {!revealSender && (
           <p className="rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 px-3.5 py-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
-            Your address is hidden. <b>Sending to an exchange? Turn “Reveal my address” on</b> — exchanges
-            match deposits by sender address, and a hidden one is often not credited.
+            {t("send.hiddenWarningBefore")} <b>{t("send.hiddenWarningBold")}</b> {t("send.hiddenWarningAfter")}
           </p>
         )}
 
         <div className="flex items-center justify-between rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3">
-          <span className="text-sm text-zinc-400">Fee rate</span>
+          <span className="text-sm text-zinc-400">{t("send.feeRate")}</span>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -373,12 +374,10 @@ export function SendPanel() {
 
         {amountMicro && amountMicro > 0n && !selection && (
           <p className="text-center text-xs text-[var(--st-red)]">
-            Insufficient spendable balance
-            {store.lockedMicro > 0n
-              ? ` — ${formatMicro(store.lockedMicro)} ${symbol} is still locked`
-              : ""}
+            {t("send.insufficient")}
+            {store.lockedMicro > 0n ? t("send.stillLocked", { amount: formatMicro(store.lockedMicro), symbol }) : ""}
             {store.pendingMicro > 0n
-              ? ` — ${formatMicro(store.pendingMicro)} ${symbol} is awaiting confirmation`
+              ? t("send.awaitingConfirmation", { amount: formatMicro(store.pendingMicro), symbol })
               : ""}
           </p>
         )}
@@ -389,20 +388,20 @@ export function SendPanel() {
           disabled={!canReview}
           onClick={() => setStage("review")}
         >
-          Review
+          {t("send.reviewButton")}
         </Button>
       </div>
 
       {result && (
         <div className="mt-5 rounded-2xl border border-[#06C983]/25 bg-[#06C983]/10 p-5">
           <p className="flex items-center gap-2 text-sm font-bold text-[var(--st-green)]">
-            <Check size={16} /> Transaction signed
+            <Check size={16} /> {t("send.signed")}
           </p>
           <dl className="mt-3 space-y-2 rounded-xl bg-[var(--tari-bg-input)] p-4 text-sm">
-            <Row label="Fee">
+            <Row label={t("send.fee")}>
               <span className="tabular">{formatMicro(result.signed.feeMicro)} {symbol}</span>
             </Row>
-            <Row label="Change back">
+            <Row label={t("send.changeBack")}>
               <span className="tabular">
                 {result.signed.changeValueMicro !== undefined
                   ? `${formatMicro(result.signed.changeValueMicro)} ${symbol}`
@@ -412,20 +411,20 @@ export function SendPanel() {
           </dl>
           <div className="mt-4 flex gap-2.5">
             <Button variant="outline" size="sm" onClick={() => void copyText(result.signed.toJson())}>
-              Copy JSON
+              {t("send.copyJson")}
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => downloadText("tari-tx.json", result.signed.toJson())}
             >
-              Download
+              {t("send.download")}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => finishLocally(result)}>
-              Save locally
+              {t("send.saveLocally")}
             </Button>
             <Button size="sm" loading={stage === "submitting"} onClick={() => void broadcast(result)}>
-              Broadcast
+              {t("send.broadcast")}
             </Button>
           </div>
         </div>

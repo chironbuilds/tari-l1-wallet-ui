@@ -3,6 +3,7 @@ import { Check, ChevronDown, Plus, Tag } from "lucide-react";
 import { useStore } from "../store";
 import { truncMiddle } from "../lib/format";
 import { Logo } from "./ui";
+import { useI18n } from "../i18n";
 
 /**
  * The account switcher on the wallet card, in the shape people already know from MetaMask: the
@@ -13,6 +14,7 @@ import { Logo } from "./ui";
  * address is presented for receiving — never the balance, the history, or what can be spent.
  */
 export function AddressSwitcher({ onAddNew }: { onAddNew: () => void }) {
+  const { t } = useI18n();
   const store = useStore();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -52,7 +54,7 @@ export function AddressSwitcher({ onAddNew }: { onAddNew: () => void }) {
         >
           {active ? <Tag size={12} /> : <Logo size={13} />}
         </span>
-        <span className="truncate text-sm font-bold">{active ? active.label : "Tari L1 Wallet"}</span>
+        <span className="truncate text-sm font-bold">{active ? active.label : t("addrswitch.wallet")}</span>
         <ChevronDown
           size={13}
           className={open ? "shrink-0 rotate-180 opacity-80 transition-transform" : "shrink-0 opacity-80 transition-transform"}
@@ -72,7 +74,7 @@ export function AddressSwitcher({ onAddNew }: { onAddNew: () => void }) {
           <div className="max-h-[240px] overflow-y-auto py-1">
             <Row
               icon={<Logo size={13} />}
-              title="Tari L1 Wallet"
+              title={t("addrswitch.wallet")}
               subtitle={truncMiddle(mainAddress, 10, 8)}
               selected={store.activeSubAddress === null}
               onClick={() => {
@@ -104,11 +106,11 @@ export function AddressSwitcher({ onAddNew }: { onAddNew: () => void }) {
             className="flex w-full items-center gap-2 border-t px-3 py-2.5 text-left text-xs font-bold text-[var(--tari-text)] transition-colors hover:bg-[color-mix(in_srgb,var(--tari-text)_8%,transparent)]"
             style={{ borderColor: "var(--tari-border)" }}
           >
-            <Plus size={14} /> Add sub-address
+            <Plus size={14} /> {t("addrswitch.addSub")}
           </button>
 
           <p className="border-t px-3 py-2 text-[10px] leading-relaxed text-zinc-500" style={{ borderColor: "var(--tari-border)" }}>
-            All one wallet — switching changes only the address you hand out.
+            {t("addrswitch.note")}
           </p>
         </div>
       )}

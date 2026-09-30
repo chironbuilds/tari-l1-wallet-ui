@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Check, Copy, Loader2, X } from "lucide-react";
 import { copyText } from "../lib/format";
+import { t } from "../i18n";
 
 export function cn(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -276,7 +277,7 @@ export function Modal({
               <button
                 onClick={onClose}
                 className="rounded-lg p-1.5 text-zinc-500 transition-colors hover:bg-white/5 hover:text-[var(--tari-text)]"
-                aria-label="Close"
+                aria-label={t("ui.close")}
               >
                 <X size={18} />
               </button>
@@ -316,7 +317,7 @@ export function CopyButton({
       }}
     >
       {ok ? <Check size={14} className="text-[var(--st-green)]" /> : <Copy size={14} />}
-      {label ?? (ok ? "Copied" : "Copy")}
+      {label ?? (ok ? t("ui.copied") : t("ui.copy"))}
     </Button>
   );
 }
@@ -385,7 +386,7 @@ export function NodeStatusDot({
 }) {
   const color =
     status === "online" ? "var(--st-green)" : status === "offline" ? "var(--st-red)" : "var(--st-amber)";
-  const label = status === "online" ? "Connected" : status === "offline" ? "Not connected" : "Checking connection";
+  const label = status === "online" ? t("ui.connected") : status === "offline" ? t("ui.notConnected") : t("ui.checkingConnection");
   return (
     <span
       role="img"

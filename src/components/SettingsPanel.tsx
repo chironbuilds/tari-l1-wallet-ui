@@ -7,6 +7,7 @@ import {
   Globe,
   History,
   KeyRound,
+  Languages,
   Loader2,
   Lock,
   Package,
@@ -23,18 +24,20 @@ import { AUTO_NODE_ID, getRpcBase, nodeById, nodesForNetwork } from "../lib/rpc"
 import { networkLabel } from "../lib/tari";
 import { NetworkSwitch } from "./NetworkSwitch";
 import { MIN_PIN_LENGTH } from "../lib/pinLock";
+import { useI18n, type TranslationKey } from "../i18n";
+import { LanguageSwitch } from "./LanguageSwitch";
 import { useToast } from "./toast";
 import { Badge, Button, Card, CopyButton, Field, NodeStatusDot, Segmented, Switch, TextInput } from "./ui";
 import { connectedSites, revokeConnection, revokeViewAccess } from "../lib/dappBridge";
 import { forgetOrigin } from "../lib/dappRequests";
 import { detectedCores, maxWorkers, threadOptions } from "../lib/threads";
 
-const AUTO_LOCK_OPTIONS = [
-  { value: 1, label: "1 min" },
-  { value: 5, label: "5 min" },
-  { value: 15, label: "15 min" },
-  { value: 30, label: "30 min" },
-  { value: 0, label: "Never" },
+const AUTO_LOCK_OPTIONS: { value: number; label: TranslationKey }[] = [
+  { value: 1, label: "settings.min1" },
+  { value: 5, label: "settings.min5" },
+  { value: 15, label: "settings.min15" },
+  { value: 30, label: "settings.min30" },
+  { value: 0, label: "settings.never" },
 ];
 
 // Wrong-PIN attempts allowed before the gate makes you wait, and how long the wait is.
@@ -70,6 +73,7 @@ function GateError({ message }: { message: string }) {
 
 function PinGate({ onPass }: { onPass: () => void }) {
   const { verifyPin } = useStore();
+  const { t } = useI18n();
   const [pin, setPinValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -79,8 +83,8 @@ function PinGate({ onPass }: { onPass: () => void }) {
 
   useEffect(() => {
     if (lockedUntil <= now) return;
-    const t = setTimeout(() => setNow(Date.now()), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setNow(Date.now()), 1000);
+    return () => clearTimeout(timer);
   }, [lockedUntil, now]);
 
   const coolingDown = lockedUntil > now;
@@ -102,22 +106,20 @@ function PinGate({ onPass }: { onPass: () => void }) {
       setAttempts(0);
       setLockedUntil(until);
       setNow(Date.now());
-      setError(`Too many incorrect attempts. Try again in ${PIN_COOLDOWN_MS / 1000} seconds.`);
+      setError(t("settings.tooManyAttempts", { seconds: PIN_COOLDOWN_MS / 1000 }));
     } else {
       setAttempts(n);
-      setError("Incorrect PIN.");
+      setError(t("settings.incorrectPin"));
     }
   };
 
   return (
     <Card className="mx-auto w-full max-w-md p-6 sm:p-7">
       <h3 className="mb-1.5 flex items-center gap-2 text-sm font-bold text-[var(--tari-text)]">
-        <Lock size={15} /> Security & recovery
+        <Lock size={15} /> {t("settings.securityRecovery")}
       </h3>
-      <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-        Enter your PIN to open settings. This keeps your recovery phrase safe if you leave the wallet open.
-      </p>
-      <Field label="PIN">
+      <p className="mb-5 text-xs leading-relaxed text-zinc-500">{t("settings.gateIntro")}</p>
+      <Field label={t("settings.pin")}>
         <TextInput
           type="password"
           inputMode="numeric"
@@ -132,11 +134,11 @@ function PinGate({ onPass }: { onPass: () => void }) {
       </Field>
       {error && (
         <GateError
-          message={coolingDown ? `Too many incorrect attempts. Try again in ${Math.ceil((lockedUntil - now) / 1000)} s.` : error}
+          message={coolingDown ? t("settings.tooManyAttemptsShort", { seconds: Math.ceil((lockedUntil - now) / 1000) }) : error}
         />
       )}
       <Button className="mt-5 w-full" loading={busy} disabled={!pin || coolingDown} onClick={go}>
-        <KeyRound size={15} /> Unlock settings
+        <KeyRound size={15} /> {t("settings.unlockSettings")}
       </Button>
     </Card>
   );
@@ -145,6 +147,7 @@ function PinGate({ onPass }: { onPass: () => void }) {
 function SetPinGate({ onPass }: { onPass: () => void }) {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const [pin, setPinValue] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,17 +156,17 @@ function SetPinGate({ onPass }: { onPass: () => void }) {
   const go = async () => {
     setError(null);
     if (pin.length < MIN_PIN_LENGTH) {
-      setError(`PIN must be at least ${MIN_PIN_LENGTH} characters.`);
+      setError(t("settings.pinTooShort", { min: MIN_PIN_LENGTH }));
       return;
     }
     if (pin !== confirmPin) {
-      setError("PINs don't match.");
+      setError(t("settings.pinMismatch"));
       return;
     }
     setBusy(true);
     try {
       await store.setPin(pin);
-      toast({ tone: "success", title: "PIN set", message: "Settings and your recovery phrase are now protected." });
+      toast({ tone: "success", title: t("settings.pinSetTitle"), message: t("settings.pinSetProtected") });
       onPass();
     } finally {
       setBusy(false);
@@ -173,14 +176,11 @@ function SetPinGate({ onPass }: { onPass: () => void }) {
   return (
     <Card className="mx-auto w-full max-w-md p-6 sm:p-7">
       <h3 className="mb-1.5 flex items-center gap-2 text-sm font-bold text-[var(--tari-text)]">
-        <ShieldCheck size={15} /> Set a PIN first
+        <ShieldCheck size={15} /> {t("settings.setPinFirst")}
       </h3>
-      <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-        Settings shows your recovery phrase, so it needs a PIN. Anyone using this browser while the wallet is open
-        could otherwise copy it and take your coins. The PIN also encrypts the seed stored on this device.
-      </p>
+      <p className="mb-5 text-xs leading-relaxed text-zinc-500">{t("settings.setPinFirstIntro")}</p>
       <div className="grid gap-3">
-        <Field label="New PIN">
+        <Field label={t("settings.newPin")}>
           <TextInput
             type="password"
             inputMode="numeric"
@@ -190,7 +190,7 @@ function SetPinGate({ onPass }: { onPass: () => void }) {
             placeholder="••••"
           />
         </Field>
-        <Field label="Confirm PIN">
+        <Field label={t("settings.confirmPin")}>
           <TextInput
             type="password"
             inputMode="numeric"
@@ -204,7 +204,7 @@ function SetPinGate({ onPass }: { onPass: () => void }) {
       </div>
       {error && <GateError message={error} />}
       <Button className="mt-5 w-full" loading={busy} disabled={!pin || !confirmPin} onClick={go}>
-        <KeyRound size={15} /> Set PIN and continue
+        <KeyRound size={15} /> {t("settings.setPinContinue")}
       </Button>
     </Card>
   );
@@ -213,6 +213,7 @@ function SetPinGate({ onPass }: { onPass: () => void }) {
 function SettingsContent() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const [revealBackup, setRevealBackup] = useState(false);
   const [revealWords, setRevealWords] = useState(false);
   const [words, setWords] = useState<string[] | null>(null);
@@ -231,14 +232,14 @@ function SettingsContent() {
   const [sites, setSites] = useState<{ origin: string; viewAccess: boolean }[]>(() => connectedSites());
 
   useEffect(() => {
-    void fetchChainTip().then((t) => {
-      if (!t) return;
-      setTip(t.height);
+    void fetchChainTip().then((chainTip) => {
+      if (!chainTip) return;
+      setTip(chainTip.height);
       // Never below the wallet's birthday block — that is the earliest block that can hold our
       // outputs, and the store floors every scan there anyway.
       const floor = store.birthdayHeight ?? 1;
-      setScanFrom(String(Math.min(t.height, Math.max(floor, t.height - 499))));
-      setScanTo(String(t.height));
+      setScanFrom(String(Math.min(chainTip.height, Math.max(floor, chainTip.height - 499))));
+      setScanTo(String(chainTip.height));
     });
   }, [store.birthdayHeight]);
 
@@ -256,7 +257,7 @@ function SettingsContent() {
     } catch (e) {
       toast({
         tone: "error",
-        title: "Could not decipher seed",
+        title: t("settings.decipherFailed"),
         message: e instanceof Error ? e.message : String(e),
       });
     }
@@ -266,11 +267,11 @@ function SettingsContent() {
   async function submitPin() {
     setPinError(null);
     if (newPin.length < MIN_PIN_LENGTH) {
-      setPinError(`PIN must be at least ${MIN_PIN_LENGTH} characters.`);
+      setPinError(t("settings.pinTooShort", { min: MIN_PIN_LENGTH }));
       return;
     }
     if (newPin !== newPinConfirm) {
-      setPinError("New PINs don't match.");
+      setPinError(t("settings.newPinsMismatch"));
       return;
     }
     setPinBusy(true);
@@ -278,14 +279,14 @@ function SettingsContent() {
       if (store.hasPin) {
         const ok = await store.changePin(oldPin, newPin);
         if (!ok) {
-          setPinError("Current PIN is incorrect.");
+          setPinError(t("settings.currentPinWrong"));
           setPinBusy(false);
           return;
         }
-        toast({ tone: "success", title: "PIN changed" });
+        toast({ tone: "success", title: t("settings.pinChanged") });
       } else {
         await store.setPin(newPin);
-        toast({ tone: "success", title: "PIN set", message: "You can now lock this wallet." });
+        toast({ tone: "success", title: t("settings.pinSetTitle"), message: t("settings.pinSetCanLock") });
       }
       setOldPin("");
       setNewPin("");
@@ -306,12 +307,9 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
             <ShieldCheck size={15} />
           </span>
-          Recovery phrase
+          {t("settings.recoveryPhrase")}
         </h3>
-        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Your wallet's 24-word seed (Tari CipherSeed format — compatible with the official
-          Tari wallet). Write it down; it restores your funds anywhere.
-        </p>
+        <p className="mb-5 text-xs leading-relaxed text-zinc-500">{t("settings.recoveryIntro")}</p>
         {revealWords && words && (
           <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl border border-white/[0.08] bg-black/30 p-3">
             {words.map((w, i) => (
@@ -326,10 +324,10 @@ function SettingsContent() {
           <Button variant="outline" onClick={() => void revealPhrase()} disabled={wordsBusy}>
             {wordsBusy && <Loader2 size={14} className="animate-spin" />}
             {revealWords ? <EyeOff size={14} /> : <Eye size={14} />}
-            {revealWords ? "Hide phrase" : "Reveal 24 words"}
+            {revealWords ? t("settings.hidePhrase") : t("settings.revealWords")}
           </Button>
           {revealWords && words && (
-            <CopyButton text={words.join(" ")} label="Copy phrase" />
+            <CopyButton text={words.join(" ")} label={t("settings.copyPhrase")} />
           )}
         </div>
       </Card>
@@ -339,12 +337,9 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600">
             <Package size={15} />
           </span>
-          Enciphered backup
+          {t("settings.encipheredBackup")}
         </h3>
-        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Your CipherSeed encrypted with a built-in nonce — restore it on any device.
-          Anyone holding this blob can spend your funds.
-        </p>
+        <p className="mb-5 text-xs leading-relaxed text-zinc-500">{t("settings.backupIntro")}</p>
         <div className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-4">
           <p className="font-mono text-[11px] break-all text-zinc-400">
             {revealBackup && store.backupHex
@@ -357,19 +352,30 @@ function SettingsContent() {
         <div className="mt-4 flex flex-wrap gap-2.5">
           <Button variant="outline" size="sm" onClick={() => setRevealBackup((s) => !s)}>
             {revealBackup ? <EyeOff size={14} /> : <Eye size={14} />}
-            {revealBackup ? "Hide" : "Reveal"}
+            {revealBackup ? t("common.hide") : t("common.reveal")}
           </Button>
           {store.backupHex && (
             <>
               <Button variant="outline" size="sm" onClick={() => downloadText("tari-l1-backup.hex.txt", store.backupHex!)}>
-                <Download size={14} /> Download .txt
+                <Download size={14} /> {t("settings.downloadTxt")}
               </Button>
               <span className="self-center">
-                <Badge tone="amber">keep private</Badge>
+                <Badge tone="amber">{t("settings.keepPrivate")}</Badge>
               </span>
             </>
           )}
         </div>
+      </Card>
+
+      <Card className="h-fit p-6 sm:p-7">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
+          <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600">
+            <Languages size={15} />
+          </span>
+          {t("settings.language")}
+        </h3>
+        <p className="mb-4 text-xs leading-relaxed text-zinc-500">{t("settings.languageIntro")}</p>
+        <LanguageSwitch className="w-full" />
       </Card>
       </div>
 
@@ -378,16 +384,14 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
             <Lock size={15} />
           </span>
-          Lock
+          {t("settings.lock")}
         </h3>
         <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          {store.hasPin
-            ? "Your seed is encrypted on this device with your PIN. Locking hides the wallet and clears the decrypted seed from memory without erasing anything — unlock with the same PIN."
-            : "Set a PIN to encrypt your seed on this device and enable locking. Without a PIN, this wallet can only be erased, not locked."}
+          {store.hasPin ? t("settings.lockIntroPin") : t("settings.lockIntroNoPin")}
         </p>
         <div className={`grid gap-3 ${store.hasPin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {store.hasPin && (
-            <Field label="Current PIN">
+            <Field label={t("settings.currentPin")}>
               <TextInput
                 type="password"
                 inputMode="numeric"
@@ -396,7 +400,7 @@ function SettingsContent() {
               />
             </Field>
           )}
-          <Field label={store.hasPin ? "New PIN" : "Choose a PIN"}>
+          <Field label={store.hasPin ? t("settings.newPin") : t("settings.choosePin")}>
             <TextInput
               type="password"
               inputMode="numeric"
@@ -404,7 +408,7 @@ function SettingsContent() {
               onChange={(e) => setNewPin(e.target.value)}
             />
           </Field>
-          <Field label="Confirm">
+          <Field label={t("settings.confirm")}>
             <TextInput
               type="password"
               inputMode="numeric"
@@ -416,45 +420,40 @@ function SettingsContent() {
         <div className="mt-3">
           <Button variant="outline" onClick={() => void submitPin()} disabled={pinBusy || !newPin}>
             {pinBusy && <Loader2 size={14} className="animate-spin" />}
-            <KeyRound size={14} /> {store.hasPin ? "Change PIN" : "Set PIN"}
+            <KeyRound size={14} /> {store.hasPin ? t("settings.changePin") : t("settings.setPin")}
           </Button>
         </div>
         {pinError && <p className="mt-3 text-xs text-[var(--st-red)]">{pinError}</p>}
 
         <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
-          <Field label="Auto-lock after inactivity">
+          <Field label={t("settings.autoLock")}>
             <Segmented
               value={String(store.autoLockMinutes)}
               onChange={(v) => store.setAutoLockMinutes(Number(v))}
-              options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+              options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: t(o.label) }))}
               fill
             />
           </Field>
         </div>
 
         <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
-          <Field label="Default fee privacy (Ootle / L2)">
+          <Field label={t("settings.feePrivacy")}>
             <Switch
               checked={store.feePrivacyDefault === "private"}
               onChange={(v) => store.setFeePrivacyDefault(v ? "private" : "transparent")}
-              offLabel="Transparent"
-              onLabel="Private"
+              offLabel={t("settings.transparent")}
+              onLabel={t("settings.private")}
             />
           </Field>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-            Private pays the fee from a shielded UTXO instead of your revealed balance, so the
-            transaction doesn't reveal this account on-chain. Requires some TARI already shielded —
-            see the Private balance panel. A connected dApp can override this per request, or
-            require one or the other outright.
-          </p>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">{t("settings.feePrivacyNote")}</p>
         </div>
 
         <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--tari-border)] pt-4">
           <Button variant="outline" size="sm" disabled={!store.hasPin} onClick={() => store.lock()}>
-            <Clock size={14} /> Lock now
+            <Clock size={14} /> {t("settings.lockNow")}
           </Button>
           {!store.hasPin && (
-            <span className="text-[11px] text-zinc-600">Set a PIN above to enable this.</span>
+            <span className="text-[11px] text-zinc-600">{t("settings.setPinAbove")}</span>
           )}
         </div>
       </Card>
@@ -465,12 +464,11 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
             <Globe size={15} />
           </span>
-          Network
+          {t("settings.network")}
         </h3>
         <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="min-w-0 flex-1 text-xs leading-relaxed text-zinc-500">
-            L1 network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. The same recovery phrase is used on
-            both; balances, activity, burns and sub-addresses are kept separately per network.
+            {t("settings.l1Network")} <b className="text-zinc-400">{networkLabel(store.network)}</b>. {t("settings.networkNote")}
           </p>
           <NetworkSwitch />
         </div>
@@ -478,19 +476,16 @@ function SettingsContent() {
           <div className="mt-4 border-t border-[var(--tari-border)] pt-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-[var(--tari-text)]">Node</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
-                  Which base node this wallet queries for scanning and broadcasts. Auto picks the
-                  fastest node that is fully synced; or pin a specific one.
-                </p>
+                <p className="text-[13px] font-semibold text-[var(--tari-text)]">{t("settings.node")}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">{t("settings.nodeIntro")}</p>
               </div>
               <select
                 value={store.selectedNode}
                 onChange={(e) => store.setSelectedNode(e.target.value)}
-                aria-label="Query node"
+                aria-label={t("settings.queryNode")}
                 className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
               >
-                <option value={AUTO_NODE_ID}>Auto (fastest)</option>
+                <option value={AUTO_NODE_ID}>{t("settings.autoFastest")}</option>
                 {nodesForNetwork(store.network).map((n) => (
                   <option key={n.id} value={n.id}>
                     {n.label}
@@ -502,15 +497,15 @@ function SettingsContent() {
               <NodeStatusDot status={store.nodeStatus} />
               <span className="min-w-0 text-zinc-500">
                 {store.nodeStatus === "checking"
-                  ? "Checking nodes…"
+                  ? t("settings.checkingNodes")
                   : store.nodeStatus === "offline"
-                    ? "Not connected — no node responded"
+                    ? t("settings.noNodeResponded")
                     : (() => {
                         const node = store.activeNodeId ? nodeById(store.network!, store.activeNodeId) : null;
-                        const name = node ? node.label : "node";
-                        const auto = store.selectedNode === AUTO_NODE_ID ? "Auto → " : "";
+                        const name = node ? node.label : t("settings.nodeFallback");
+                        const auto = store.selectedNode === AUTO_NODE_ID ? t("settings.autoArrow") : "";
                         const ms = store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : "";
-                        return `Connected: ${auto}${name}${ms}`;
+                        return t("settings.connectedTo", { name: `${auto}${name}${ms}` });
                       })()}
               </span>
               <button
@@ -518,7 +513,7 @@ function SettingsContent() {
                 onClick={() => store.refreshNodeStatus()}
                 className="ml-auto shrink-0 rounded-md px-2 py-0.5 text-[11px] whitespace-nowrap text-zinc-500 underline decoration-dotted hover:text-[var(--tari-text)]"
               >
-                Re-test
+                {t("settings.retest")}
               </button>
             </div>
           </div>
@@ -530,17 +525,17 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
             <Radar size={15} />
           </span>
-          Chain scan
+          {t("settings.chainScan")}
         </h3>
         <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Scans blocks for outputs owned by this wallet, reading them from the{" "}
-          {networkLabel(store.network)} base node query service at{" "}
-          <code className="text-zinc-400">{(getRpcBase() ?? "").replace(/^https?:\/\//, "")}</code>. Found outputs are
-          added automatically.
+          {t("settings.chainScanIntro", {
+            network: networkLabel(store.network),
+            host: (getRpcBase() ?? "").replace(/^https?:\/\//, ""),
+          })}
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Field label="From block">
+          <Field label={t("settings.fromBlock")}>
             <TextInput
               value={scanFrom}
               onChange={(e) => setScanFrom(e.target.value.replace(/\D/g, ""))}
@@ -548,7 +543,7 @@ function SettingsContent() {
               mono
             />
           </Field>
-          <Field label="To block">
+          <Field label={t("settings.toBlock")}>
             <TextInput
               value={scanTo}
               onChange={(e) => setScanTo(e.target.value.replace(/\D/g, ""))}
@@ -559,22 +554,20 @@ function SettingsContent() {
         </div>
         {(tip || store.birthdayHeight) && (
           <p className="mt-2 mb-4 text-[11px] leading-relaxed text-zinc-500">
-            {tip ? `Chain tip ${tip.toLocaleString()}.` : ""}
+            {tip ? t("settings.chainTip", { height: tip.toLocaleString() }) : ""}
             {tip && store.birthdayHeight ? " " : ""}
-            {store.birthdayHeight
-              ? `Scans never start below this wallet's birthday block, ${store.birthdayHeight.toLocaleString()}.`
-              : ""}
+            {store.birthdayHeight ? t("settings.birthdayFloor", { height: store.birthdayHeight.toLocaleString() }) : ""}
           </p>
         )}
 
         <Field
-          label={`Threads — scan speed (${detectedCores()} cores detected)`}
+          label={t("settings.threads", { cores: detectedCores() })}
           hint={
             store.scanThreads >= maxWorkers()
-              ? `All ${maxWorkers()} available — fastest, leaves one core for the interface`
+              ? t("settings.threadsMax", { n: maxWorkers() })
               : store.scanThreads >= Math.ceil(maxWorkers() / 2)
-                ? "Balanced — quick without taking the whole machine"
-                : "Gentle — slowest, leaves the machine free"
+                ? t("settings.threadsBalanced")
+                : t("settings.threadsGentle")
           }
         >
           <Segmented
@@ -584,7 +577,7 @@ function SettingsContent() {
             // cores just oversubscribes the CPU: the scan gets slower, not faster.
             options={threadOptions().map((n) => ({
               value: String(n),
-              label: n === maxWorkers() ? "Max" : String(n),
+              label: n === maxWorkers() ? t("common.max") : String(n),
             }))}
             fill
           />
@@ -596,9 +589,9 @@ function SettingsContent() {
               <span>
                 {store.scan.done
                   ? store.scan.error
-                    ? "stopped — error"
-                    : "scan complete"
-                  : "scanning…"}
+                    ? t("settings.stoppedError")
+                    : t("settings.scanComplete")
+                  : t("settings.scanningLower")}
               </span>
               <span className="tabular font-mono">
                 {store.scan.current.toLocaleString()} / {store.scan.to.toLocaleString()}
@@ -613,16 +606,16 @@ function SettingsContent() {
               />
             </div>
             <p className="mt-2">
-              blocks {store.scan.blocksScanned.toLocaleString()} · outputs seen{" "}
-              {store.scan.outputsSeen.toLocaleString()} ·{" "}
-              <b className="text-[var(--st-green)]">{store.scan.found} owned</b>
+              {t("settings.scanStats", {
+                blocks: store.scan.blocksScanned.toLocaleString(),
+                outputs: store.scan.outputsSeen.toLocaleString(),
+              })}{" "}
+              <b className="text-[var(--st-green)]">{t("settings.owned", { n: store.scan.found })}</b>
               {store.scan.skipped > 0 && (
-                <span className="text-[var(--st-amber)]"> · {store.scan.skipped} unavailable</span>
+                <span className="text-[var(--st-amber)]">{t("settings.unavailable", { n: store.scan.skipped })}</span>
               )}
               {store.scan.importFailures > 0 && (
-                <span className="text-[var(--st-amber)]">
-                  {" "}· {store.scan.importFailures} import failures
-                </span>
+                <span className="text-[var(--st-amber)]"> {t("settings.importFailures", { n: store.scan.importFailures })}</span>
               )}
             </p>
             {store.scan.failureSamples.length > 0 && (
@@ -632,7 +625,7 @@ function SettingsContent() {
             )}
             {store.scan.skippedHeights.length > 0 && (
               <p className="mt-1 text-[10px] text-zinc-600">
-                skipped heights: {store.scan.skippedHeights.slice(0, 8).join(", ")}
+                {t("settings.skippedHeights")} {store.scan.skippedHeights.slice(0, 8).join(", ")}
                 {store.scan.skippedHeights.length > 8 ? "…" : ""}
               </p>
             )}
@@ -648,19 +641,19 @@ function SettingsContent() {
                   store.startScan(Math.max(Number(scanFrom), store.birthdayHeight ?? 1), Number(scanTo))
                 }
               >
-                <Radar size={15} /> Start scan
+                <Radar size={15} /> {t("settings.startScan")}
               </Button>
               <Button
                 variant="outline"
-                title="Re-import your full balance from the wallet's birthday block — use this if coins went missing after a rejected send."
+                title={t("settings.rescanTitle")}
                 onClick={() => store.rescanFromBirthday()}
               >
-                Rescan from birthday
+                {t("settings.rescanBirthday")}
               </Button>
             </>
           ) : (
             <Button variant="danger" onClick={store.stopScan}>
-              Stop scan
+              {t("settings.stopScan")}
             </Button>
           )}
         </div>
@@ -675,15 +668,14 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-fuchsia-600">
             <Globe size={15} />
           </span>
-          Connected dApps
+          {t("settings.connectedDapps")}
         </h3>
         <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Sites allowed to see your address and ask you to approve transactions. A site marked{" "}
-          <b className="text-[var(--st-amber)]">sees private balance</b> can also read what you hold
-          in shielded outputs — it still cannot spend anything without your approval.
+          {t("settings.dappsIntroBefore")} <b className="text-[var(--st-amber)]">{t("settings.seesPrivate")}</b>{" "}
+          {t("settings.dappsIntroAfter")}
         </p>
         {sites.length === 0 ? (
-          <p className="text-xs text-zinc-600">No dApps connected.</p>
+          <p className="text-xs text-zinc-600">{t("settings.noDapps")}</p>
         ) : (
           <div className="flex flex-col gap-2">
             {sites.map((site) => (
@@ -697,7 +689,7 @@ function SettingsContent() {
                 </span>
                 {site.viewAccess && (
                   <Badge tone="amber">
-                    <Eye size={11} /> sees private balance
+                    <Eye size={11} /> {t("settings.seesPrivate")}
                   </Badge>
                 )}
                 {site.viewAccess && (
@@ -707,10 +699,10 @@ function SettingsContent() {
                     onClick={() => {
                       revokeViewAccess(site.origin);
                       setSites(connectedSites());
-                      toast({ tone: "info", title: "Private view access revoked", message: site.origin });
+                      toast({ tone: "info", title: t("settings.viewRevoked"), message: site.origin });
                     }}
                   >
-                    Revoke view
+                    {t("settings.revokeView")}
                   </Button>
                 )}
                 <Button
@@ -722,10 +714,10 @@ function SettingsContent() {
                     // could be disconnected and still submit something approved beforehand.
                     forgetOrigin(site.origin);
                     setSites(connectedSites());
-                    toast({ tone: "info", title: "Disconnected", message: site.origin });
+                    toast({ tone: "info", title: t("settings.disconnected"), message: site.origin });
                   }}
                 >
-                  Disconnect
+                  {t("settings.disconnect")}
                 </Button>
               </div>
             ))}
@@ -738,31 +730,28 @@ function SettingsContent() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-red-600 to-orange-600">
             <Trash2 size={15} />
           </span>
-          Danger zone
+          {t("settings.dangerZone")}
         </h3>
-        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          Destructive actions for this browser session. Download your backup first —
-          erased means erased.
-        </p>
+        <p className="mb-5 text-xs leading-relaxed text-zinc-500">{t("settings.dangerIntro")}</p>
         <div className="flex flex-wrap gap-3">
           <Button
             variant="outline"
             onClick={() => {
               store.clearHistory();
-              toast({ tone: "info", title: "Activity history cleared" });
+              toast({ tone: "info", title: t("settings.historyCleared") });
             }}
           >
-            <History size={15} /> Clear activity history
+            <History size={15} /> {t("settings.clearHistory")}
           </Button>
           <Button
             variant="danger"
             onClick={() => {
-              if (confirm("Erase this wallet and its encrypted backup from this browser? This cannot be undone.")) {
+              if (confirm(t("settings.eraseConfirm"))) {
                 store.forget();
               }
             }}
           >
-            <Trash2 size={15} /> Erase wallet
+            <Trash2 size={15} /> {t("settings.eraseWallet")}
           </Button>
         </div>
       </Card>

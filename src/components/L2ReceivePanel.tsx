@@ -4,6 +4,7 @@ import { AddressQr } from "./Dashboard";
 import { OOTLE_NETWORK_LABEL } from "../ootle";
 import { copyText } from "../lib/format";
 import { useToast } from "./toast";
+import { useI18n } from "../i18n";
 
 /**
  * Everything needed to be paid on L2.
@@ -15,6 +16,7 @@ import { useToast } from "./toast";
 export function L2ReceivePanel() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const identity = store.l2.identity;
 
   if (!identity) {
@@ -27,7 +29,7 @@ export function L2ReceivePanel() {
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#9d6bff] to-[#6d28d9]">
           <QrCode size={15} />
         </span>
-        Receive on Ootle
+        {t("l2receive.title")}
       </h2>
 
       <div className="flex justify-center">
@@ -36,21 +38,21 @@ export function L2ReceivePanel() {
 
       <div className="mt-6 space-y-3">
         <AddressField
-          label="Ootle address"
-          hint="Where someone sends you funds on L2."
+          label={t("l2receive.address")}
+          hint={t("l2receive.addressHint")}
           value={identity.address}
-          onCopied={() => toast({ tone: "success", title: "Ootle address copied" })}
+          onCopied={() => toast({ tone: "success", title: t("l2receive.addressCopied") })}
         />
         <AddressField
-          label="Account component"
-          hint="The on-chain account a dApp or instruction targets — not a payment address."
+          label={t("l2receive.component")}
+          hint={t("l2receive.componentHint")}
           value={identity.componentAddress}
-          onCopied={() => toast({ tone: "success", title: "Component address copied" })}
+          onCopied={() => toast({ tone: "success", title: t("l2receive.componentCopied") })}
         />
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-zinc-500">
-        These addresses are on {OOTLE_NETWORK_LABEL}. MainNet XTM sent here will not arrive.
+        {t("l2receive.networkNote", { network: OOTLE_NETWORK_LABEL })}
       </p>
     </div>
   );
@@ -67,6 +69,7 @@ function AddressField({
   value: string;
   onCopied: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-4">
       <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -75,7 +78,7 @@ function AddressField({
           className="text-[10px] font-bold text-[var(--st-violet)]"
           onClick={() => void copyText(value).then((ok) => ok && onCopied())}
         >
-          Copy
+          {t("common.copy")}
         </button>
       </div>
       <p className="font-mono text-[11px] break-all text-zinc-400">{value}</p>

@@ -15,6 +15,7 @@ import { isSpendable, useStore } from "../store";
 import { useToast } from "./toast";
 import { Button, CopyButton, Field, Logo, Segmented, TextInput, cn } from "./ui";
 import { BurnAnimation } from "./BurnAnimation";
+import { t as translate, useI18n, type TranslationKey } from "../i18n";
 
 /**
  * What an Ootle claim costs, for the estimate shown before burning. The claim itself measures its
@@ -28,6 +29,7 @@ type Destination = "own" | "other";
 export function BurnPanel() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const symbol = coinSymbol(store.network);
 
   const [destination, setDestination] = useState<Destination>("own");
@@ -80,7 +82,7 @@ export function BurnPanel() {
       for (const idx of selection.indices) {
         const rec = spendable[idx];
         const handle = store.getHandle(rec.id);
-        if (!handle) throw new Error(`Output ${rec.id.slice(0, 6)} is unavailable`);
+        if (!handle) throw new Error(t("burn.outputUnavailable", { id: rec.id.slice(0, 6) }));
         ids.push(rec.id);
         builder.addInput(handle);
       }
@@ -115,9 +117,9 @@ export function BurnPanel() {
         if (inputsAlreadyConsumed) void store.rescanFromBirthday();
         toast({
           tone: "error",
-          title: `Node rejected the burn (${out.result})`,
+          title: t("burn.nodeRejected", { result: out.result }),
           message: inputsAlreadyConsumed
-            ? "Some of those coins were already spent on-chain. Re-syncing your balance from the chain…"
+            ? t("burn.alreadySpent")
             : out.detail.slice(0, 160),
         });
         return;
@@ -140,7 +142,7 @@ export function BurnPanel() {
       setAcknowledged(false);
     } catch (e) {
       setStage("review");
-      toast({ tone: "error", title: "Burn failed", message: e instanceof Error ? e.message : String(e) });
+      toast({ tone: "error", title: t("burn.failed"), message: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -149,19 +151,19 @@ export function BurnPanel() {
       <div className="animate-fade-up">
         <Header />
         <BurnAnimation
-          amountLabel={`${formatMicro(justBurned.amount)} ${symbol} burned`}
+          amountLabel={t("burn.burnedLabel", { amount: formatMicro(justBurned.amount), symbol })}
           receiveLabel={
             !claimable
-              ? `Not claimable yet: Ootle is not live on ${networkLabel(store.network)}. Export the proof once the burn is mined and keep it.`
+              ? t("burn.notClaimableYetLong", { network: networkLabel(store.network) })
               : destination === "own"
-                ? "It will be claimed to your Ootle account automatically once the burn is confirmed."
-                : "Export the claim proof below once the burn is mined."
+                ? t("burn.autoClaim")
+                : t("burn.exportBelow")
           }
           onDone={() => undefined}
         />
         <div className="mt-2 flex justify-center">
           <Button variant="outline" size="sm" onClick={() => { setJustBurned(null); setStage("form"); }}>
-            Done
+            {t("burn.done")}
           </Button>
         </div>
         <BurnList />
@@ -177,34 +179,34 @@ export function BurnPanel() {
             onClick={() => setStage("form")}
             disabled={stage === "burning"}
             className="rounded-full p-1.5 text-zinc-400 hover:bg-[color-mix(in_srgb,var(--tari-text)_10%,transparent)] hover:text-[var(--tari-text)]"
-            aria-label="Back"
+            aria-label={t("burn.back")}
           >
             <ChevronLeft size={18} />
           </button>
-          Review burn
+          {t("burn.reviewTitle")}
         </h2>
         <dl className="space-y-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-5 text-sm">
-          <Row label="Burn">
+          <Row label={t("burn.rowBurn")}>
             <span className="tabular text-base font-bold text-[var(--tari-text)]">
               {formatMicro(amountMicro ?? 0n)} {symbol}
             </span>
           </Row>
-          <Row label="L1 network fee (est.)">
+          <Row label={t("burn.rowL1Fee")}>
             <span className="tabular">{selection ? formatMicro(selection.feeMicro) : "—"} {symbol}</span>
           </Row>
-          <Row label="Claim to">
-            <span>{destination === "own" ? "Your Ootle account" : truncMiddle(claimKey ?? "", 10, 8)}</span>
+          <Row label={t("burn.rowClaimTo")}>
+            <span>{destination === "own" ? t("burn.yourOotle") : truncMiddle(claimKey ?? "", 10, 8)}</span>
           </Row>
-          <Row label="Receive on Ootle (approx.)">
+          <Row label={t("burn.rowReceive")}>
             <span className="tabular">
-              {claimable ? `${formatMicro(receiveMicro)} ${l2Symbol}` : "Not claimable yet"}
+              {claimable ? `${formatMicro(receiveMicro)} ${l2Symbol}` : t("burn.notClaimableShort")}
             </span>
           </Row>
         </dl>
         {!claimable && <NotClaimableWarning network={store.network} />}
         <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-zinc-500">
           <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[var(--st-amber)]" />
-          This transaction permanently removes the {symbol} from layer 1. It cannot be reversed.
+          {t("burn.irreversible", { symbol })}
         </p>
         <Button
           size="lg"
@@ -212,7 +214,7 @@ export function BurnPanel() {
           loading={stage === "burning"}
           onClick={() => void burn()}
         >
-          {stage === "burning" ? "Signing and broadcasting…" : `Burn ${formatMicro(amountMicro ?? 0n)} ${symbol}`}
+          {stage === "burning" ? t("burn.signingBroadcasting") : t("burn.burnAmount", { amount: formatMicro(amountMicro ?? 0n), symbol })}
         </Button>
       </div>
     );
@@ -224,14 +226,14 @@ export function BurnPanel() {
       {!claimable && <NotClaimableWarning network={store.network} />}
 
       <div className="space-y-4">
-        <Field label="Claim to">
+        <Field label={t("burn.claimToField")}>
           <Segmented
             value={destination}
             onChange={setDestination}
             className="flex w-full"
             options={[
-              { value: "own", label: "My Ootle account" },
-              { value: "other", label: "Another account" },
+              { value: "own", label: t("burn.myOotle") },
+              { value: "other", label: t("burn.anotherAccount") },
             ]}
           />
         </Field>
@@ -239,26 +241,22 @@ export function BurnPanel() {
         {destination === "own" ? (
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3">
             <span className="min-w-0">
-              <span className="block text-xs text-zinc-500">Ootle account public key</span>
+              <span className="block text-xs text-zinc-500">{t("burn.publicKey")}</span>
               <span className="block truncate font-mono text-xs text-[var(--tari-text)]">
-                {ownKey ? truncMiddle(ownKey, 14, 10) : "Deriving…"}
+                {ownKey ? truncMiddle(ownKey, 14, 10) : t("burn.deriving")}
               </span>
             </span>
             {ownKey && <CopyButton text={ownKey} label="" />}
           </div>
         ) : (
           <Field
-            label="Ootle account public key"
-            hint={
-              otherKey.trim() && !claimKeyValid
-                ? "Must be 64 hexadecimal characters"
-                : "The claim key of the Ootle account that will claim these funds"
-            }
+            label={t("burn.publicKey")}
+            hint={otherKey.trim() && !claimKeyValid ? t("burn.keyInvalid") : t("burn.keyHint")}
           >
             <TextInput
               value={otherKey}
               onChange={(e) => setOtherKey(e.target.value)}
-              placeholder="64-character hex public key"
+              placeholder={t("burn.keyPlaceholder")}
               mono
               spellCheck={false}
               error={otherKey.trim().length > 0 && !claimKeyValid}
@@ -267,9 +265,9 @@ export function BurnPanel() {
         )}
 
         <Field
-          label="Amount"
-          hint={`Available: ${formatMicro(maxSpend)} ${symbol}${
-            selection && amountMicro ? ` · L1 fee ≈ ${formatMicro(selection.feeMicro)} ${symbol}` : ""
+          label={t("burn.amount")}
+          hint={`${t("burn.available", { amount: formatMicro(maxSpend), symbol })}${
+            selection && amountMicro ? t("burn.l1FeeSuffix", { amount: formatMicro(selection.feeMicro), symbol }) : ""
           }`}
         >
           <div className="relative">
@@ -288,13 +286,13 @@ export function BurnPanel() {
               onClick={() => setAmount(formatMicro(maxSpend))}
               className="absolute top-1/2 right-2.5 -translate-y-1/2 rounded-full border border-[var(--tari-border)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--tari-text)] uppercase hover:bg-[color-mix(in_srgb,var(--tari-text)_10%,transparent)]"
             >
-              Max
+              {t("burn.max")}
             </button>
           </div>
         </Field>
 
         <div className="flex items-center justify-between rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3">
-          <span className="text-sm text-zinc-400">Fee rate</span>
+          <span className="text-sm text-zinc-400">{t("burn.feeRate")}</span>
           <div className="flex items-center gap-2">
             <input
               type="range"
@@ -303,7 +301,7 @@ export function BurnPanel() {
               value={Number(feePerGram) || 1}
               onChange={(e) => setFeePerGram(e.target.value)}
               className="w-36 accent-[var(--tari-purple)]"
-              aria-label="Fee rate"
+              aria-label={t("burn.feeRate")}
             />
             <span className="tabular w-16 text-right font-mono text-xs text-[var(--tari-text)]">
               {fpg?.toString() ?? "—"} µT/g
@@ -312,11 +310,11 @@ export function BurnPanel() {
         </div>
 
         {amountMicro && amountMicro > 0n && !selection && (
-          <p className="text-center text-xs text-[var(--st-red)]">Insufficient spendable balance</p>
+          <p className="text-center text-xs text-[var(--st-red)]">{t("burn.insufficient")}</p>
         )}
         {amountMicro !== null && amountMicro > 0n && amountMicro <= CLAIM_FEE_MICRO && (
           <p className="text-center text-xs text-[var(--st-red)]">
-            The amount must exceed the Ootle claim fee of {formatMicro(CLAIM_FEE_MICRO)} {l2Symbol}.
+            {t("burn.belowClaimFee", { amount: formatMicro(CLAIM_FEE_MICRO), symbol: l2Symbol })}
           </p>
         )}
 
@@ -328,13 +326,12 @@ export function BurnPanel() {
             className="mt-0.5 accent-[var(--st-amber)]"
           />
           <span>
-            I understand that burned {symbol} is permanently removed from layer 1 and can only be claimed on Ootle
-            by the account above. {destination === "other" && "A wrong key loses the funds for good."}
+            {t("burn.acknowledge", { symbol })} {destination === "other" && t("burn.wrongKeyLoses")}
           </span>
         </label>
 
         <Button size="lg" className="w-full" disabled={!canReview} onClick={() => setStage("review")}>
-          Review burn
+          {t("burn.reviewTitle")}
         </Button>
       </div>
 
@@ -344,38 +341,34 @@ export function BurnPanel() {
 }
 
 function NotClaimableWarning({ network }: { network: import("../lib/tari").NetworkId | null }) {
+  const { t } = useI18n();
   const name = networkLabel(network);
   return (
     <div className="mb-4 flex items-start gap-3 rounded-2xl border border-[var(--st-red)]/30 bg-[var(--st-red)]/10 p-4 text-xs leading-relaxed text-[var(--tari-text)]">
       <AlertTriangle size={16} className="mt-0.5 shrink-0 text-[var(--st-red)]" />
       <p>
-        <b>Not claimable yet.</b> Ootle is not live on {name}. Burned {coinSymbol(network)} leaves layer 1 now, but can
-        only be claimed once Ootle launches on {name} — and only if that network accepts burns made before its launch,
-        which is not guaranteed. The wallet will not try to claim it; export the proof once the burn is mined and keep
-        it safe.
+        <b>{t("burn.notClaimableTitle")}</b> {t("burn.notClaimableBody", { network: name, symbol: coinSymbol(network) })}
       </p>
     </div>
   );
 }
 
 function Header() {
+  const { t } = useI18n();
   return (
     <div className="mb-5">
       <h2 className="flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white">
           <Flame size={16} />
         </span>
-        Burn to Ootle
+        {t("burn.title")}
       </h2>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-        Move funds from Tari layer 1 to Ootle. The burned amount is claimed on Ootle one-for-one, less the claim
-        fee, once the burn is well confirmed on layer 1 (about an hour on Esmeralda).
-      </p>
+      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{t("burn.intro")}</p>
     </div>
   );
 }
 
-const STEPS = ["Broadcast", "Mined on L1", "Claimed on Ootle"] as const;
+const STEPS: TranslationKey[] = ["burn.stepBroadcast", "burn.stepMined", "burn.stepClaimed"];
 
 function stepIndex(rec: BurnRecord): number {
   switch (rec.status) {
@@ -395,32 +388,31 @@ function stepIndex(rec: BurnRecord): number {
 
 function statusText(rec: BurnRecord, claimable: boolean): string {
   if (!claimable && (rec.status === "mined" || rec.status === "claiming")) {
-    return "Mined — not claimable until Ootle launches on this network";
+    return translate("burn.minedNotClaimable");
   }
   switch (rec.status) {
     case "broadcast":
-      return "Waiting to be mined";
+      return translate("burn.waitingMined");
     case "mined":
-      if (!rec.toOwnAccount) return "Mined";
-      return isAwaitingL1Observation(rec.lastError)
-        ? "Waiting for Ootle to observe the L1 block — retrying automatically"
-        : "Waiting for confirmations, then claimed automatically";
+      if (!rec.toOwnAccount) return translate("burn.mined");
+      return isAwaitingL1Observation(rec.lastError) ? translate("burn.waitingObserve") : translate("burn.waitingConfirmations");
     case "claiming":
-      return "Claiming on Ootle…";
+      return translate("burn.claimingOotle");
     case "claimed":
       return rec.claimedElsewhere
-        ? `Claimed on Ootle by another wallet · ${formatMicro(BigInt(rec.claimedMicro ?? rec.amountMicro))} tTARI`
-        : `Claimed ${formatMicro(BigInt(rec.claimedMicro ?? "0"))} tTARI`;
+        ? translate("burn.claimedElsewhere", { amount: formatMicro(BigInt(rec.claimedMicro ?? rec.amountMicro)) })
+        : translate("burn.claimed", { amount: formatMicro(BigInt(rec.claimedMicro ?? "0")) });
     case "external":
-      return rec.outputProof ? "Mined — proof ready to export" : "Waiting to be mined";
+      return rec.outputProof ? translate("burn.proofReady") : translate("burn.waitingMined");
     case "failed":
-      return "Rejected by the network";
+      return translate("burn.rejected");
   }
 }
 
 function BurnList() {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const symbol = coinSymbol(store.network);
   const claimable = burnClaimableNow(store.network);
   const [claiming, setClaiming] = useState<string | null>(null);
@@ -431,13 +423,13 @@ function BurnList() {
     setClaiming(id);
     try {
       await store.claimBurnNow(id);
-      toast({ tone: "success", title: "Burn claimed", message: "The funds are in your Ootle private balance." });
+      toast({ tone: "success", title: t("burn.claimedTitle"), message: t("burn.claimedMessage") });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast(
         isAwaitingL1Observation(message)
-          ? { tone: "info", title: "Not claimable yet", message: "Ootle has not observed this L1 block yet. The wallet keeps retrying." }
-          : { tone: "error", title: "Claim not accepted", message: message.slice(0, 180) },
+          ? { tone: "info", title: t("burn.notYetTitle"), message: t("burn.notYetMessage") }
+          : { tone: "error", title: t("burn.notAccepted"), message: message.slice(0, 180) },
       );
     } finally {
       setClaiming(null);
@@ -446,7 +438,7 @@ function BurnList() {
 
   return (
     <section className="mt-8">
-      <h3 className="un-label mb-3">Burns</h3>
+      <h3 className="un-label mb-3">{t("burn.burns")}</h3>
       <ul className="space-y-2.5">
         {store.burns.map((rec) => {
           const step = stepIndex(rec);
@@ -459,8 +451,9 @@ function BurnList() {
                     {formatMicro(BigInt(rec.amountMicro))} {symbol}
                   </p>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
-                    {timeAgo(rec.createdAt)} · {rec.toOwnAccount ? "to your Ootle account" : `to ${truncMiddle(rec.parts.claimPublicKeyHex, 6, 4)}`}
-                    {rec.minedHeight ? ` · block ${rec.minedHeight.toLocaleString()}` : ""}
+                    {timeAgo(rec.createdAt)} ·{" "}
+                    {rec.toOwnAccount ? t("burn.toOwn") : t("burn.toKey", { key: truncMiddle(rec.parts.claimPublicKeyHex, 6, 4) })}
+                    {rec.minedHeight ? t("burn.blockSuffix", { height: rec.minedHeight.toLocaleString() }) : ""}
                   </p>
                 </div>
                 <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500">
@@ -470,7 +463,7 @@ function BurnList() {
               </div>
 
               {step >= 0 && (
-                <ol className="mt-3 grid grid-cols-3 gap-2" aria-label="Burn progress">
+                <ol className="mt-3 grid grid-cols-3 gap-2" aria-label={t("burn.progress")}>
                   {STEPS.map((label, i) => (
                     <li key={label} className="min-w-0">
                       <span
@@ -480,7 +473,7 @@ function BurnList() {
                         )}
                       />
                       <span className={cn("mt-1 block truncate text-[10px]", i <= step ? "text-[var(--tari-text)]" : "text-zinc-500")}>
-                        {label}
+                        {t(label)}
                       </span>
                     </li>
                   ))}
@@ -488,14 +481,14 @@ function BurnList() {
               )}
 
               {rec.lastError && rec.status === "mined" && !isAwaitingL1Observation(rec.lastError) && (
-                <p className="mt-2 text-[11px] break-words text-zinc-500">Last attempt: {rec.lastError.slice(0, 200)}</p>
+                <p className="mt-2 text-[11px] break-words text-zinc-500">{t("burn.lastAttempt", { error: rec.lastError.slice(0, 200) })}</p>
               )}
 
               {(proofText || (rec.status === "mined" && rec.toOwnAccount && claimable)) && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {rec.status === "mined" && rec.toOwnAccount && claimable && (
                     <Button size="sm" variant="outline" loading={claiming === rec.id} onClick={() => void claim(rec.id)}>
-                      <RefreshCw size={12} /> Claim now
+                      <RefreshCw size={12} /> {t("burn.claimNow")}
                     </Button>
                   )}
                   {proofText && (
@@ -504,7 +497,7 @@ function BurnList() {
                       variant="ghost"
                       onClick={() => downloadText(`burn-proof-${rec.parts.commitmentHex.slice(0, 12)}.json`, proofText)}
                     >
-                      <Download size={12} /> Export proof
+                      <Download size={12} /> {t("burn.exportProof")}
                     </Button>
                   )}
                 </div>

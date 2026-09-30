@@ -12,6 +12,7 @@ import {
   timeAgo,
   type BlockBubbleData,
 } from "../../lib/explorer";
+import { t } from "../../i18n";
 
 const URL_BLOCK_SOLVED = `https://customer-o6ocjyfui1ltpm5h.cloudflarestream.com/852dac0dc91d50d399a7349dcc7316a1/manifest/video.m3u8`;
 const URL_BLOCK = `https://customer-o6ocjyfui1ltpm5h.cloudflarestream.com/3ed05f3d4fbfd3eec7c4bb911915d1c2/manifest/video.m3u8`;
@@ -280,7 +281,7 @@ function ChainHeight({ height }: { height: number | null }) {
       <div className="flex select-none items-center gap-2">
         <span className="size-[11px] shrink-0 rounded-full bg-[#188750]" />
         <span className="text-base font-semibold tracking-[-0.8px] text-[var(--tari-text)]">
-          MainNet block{" "}
+          {t("ticker.mainnetBlock")}{" "}
           {height ? <NumberFlow value={height} format={{ useGrouping: true }} /> : "—"}
         </span>
       </div>
@@ -320,9 +321,9 @@ function BlockSolving({
           style={{ background: "linear-gradient(to right, #fccf5f, #ffb128)" }}
         >
           <p className="text-xs leading-[119.8%] text-[#111]">
-            <strong>#{formatBlockNumber(id)}</strong> block
+            <strong>#{formatBlockNumber(id)}</strong> {t("ticker.beingSolvedBlock")}
             <br />
-            is being solved
+            {t("ticker.beingSolved")}
           </p>
           <div className="flex items-center gap-2">
             {reward ? (
@@ -343,7 +344,7 @@ function BlockSolving({
 function BlockSolved({ height, reward, blocks, timestamp, minersSolved }: BlockBubbleData) {
   const [isHovering, setIsHovering] = useState(false);
   const title = height ? formatBlockNumber(height.toString()) : "";
-  const solvedTitle = (minersSolved ?? 0) > 100 ? `${minersSolved} miners` : "Pool";
+  const solvedTitle = (minersSolved ?? 0) > 100 ? t("ticker.miners", { n: minersSolved ?? 0 }) : t("ticker.pool");
   return (
     <div
       className="flex select-none transition-[scale] duration-200 hover:scale-[1.02]"
@@ -364,11 +365,11 @@ function BlockSolved({ height, reward, blocks, timestamp, minersSolved }: BlockB
           <div className="h-11 w-px self-center bg-[#9a9792] opacity-20" />
           <div className="flex flex-col">
             <p className="text-xs font-normal leading-[119.8%] text-[#111]">
-              Block: <strong>{title}</strong>
+              {t("ticker.block")} <strong>{title}</strong>
             </p>
             <p className="mt-0.5 flex items-center gap-1 text-[9px] font-medium text-[#3a3835] opacity-50">
               <PeopleIcon />
-              {`${solvedTitle} solved`}
+              {t("ticker.solved", { who: solvedTitle })}
             </p>
             <div className="flex items-center gap-1 pt-0.5">
               <span
@@ -384,7 +385,7 @@ function BlockSolved({ height, reward, blocks, timestamp, minersSolved }: BlockB
                 {formatReward(reward ?? 0)} XTM
               </span>
               <span className="text-[9px] font-medium whitespace-nowrap text-[#3a3835] opacity-50">
-                {timeAgo(timestamp)} ago
+                {timeAgo(timestamp)}
               </span>
             </div>
           </div>

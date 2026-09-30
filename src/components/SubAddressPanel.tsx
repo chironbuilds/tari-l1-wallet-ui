@@ -11,6 +11,7 @@ import {
 import { copyText, truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Button, EmptyState, Field, TextInput } from "./ui";
+import { useI18n } from "../i18n";
 
 /**
  * Sub-addresses: one wallet, many addresses to be paid on.
@@ -21,6 +22,7 @@ import { Button, EmptyState, Field, TextInput } from "./ui";
  * label into the transaction's memo, and the scanner reads it back off the recovered output.
  */
 export function SubAddressPanel() {
+  const { t } = useI18n();
   const store = useStore();
   const toast = useToast();
   const [label, setLabel] = useState("");
@@ -31,15 +33,15 @@ export function SubAddressPanel() {
   function create() {
     const trouble = checkLabel(label, store.subAddresses);
     if (trouble) {
-      toast({ tone: "error", title: "Cannot use that name", message: describeLabelProblem(trouble) });
+      toast({ tone: "error", title: t("sub.badName"), message: describeLabelProblem(trouble) });
       return;
     }
     const error = store.addSubAddress(label);
     if (error) {
-      toast({ tone: "error", title: "Could not create sub-address", message: error });
+      toast({ tone: "error", title: t("sub.createFailed"), message: error });
       return;
     }
-    toast({ tone: "success", title: "Sub-address created", message: label.trim() });
+    toast({ tone: "success", title: t("sub.created"), message: label.trim() });
     setLabel("");
   }
 
@@ -53,8 +55,7 @@ export function SubAddressPanel() {
           {showing.label}
         </h2>
         <p className="mb-5 text-xs text-zinc-500">
-          Payments to this address arrive in your wallet exactly like any other, tagged with this
-          name.
+          {t("sub.showingIntro")}
         </p>
 
         <div className="flex justify-center">
@@ -70,14 +71,14 @@ export function SubAddressPanel() {
             className="flex-1"
             onClick={() =>
               void copyText(showing.base58).then(
-                (ok) => ok && toast({ tone: "success", title: "Address copied" }),
+                (ok) => ok && toast({ tone: "success", title: t("sub.addressCopied") }),
               )
             }
           >
-            Copy address
+            {t("sub.copyAddress")}
           </Button>
           <Button variant="outline" onClick={() => setShowing(null)}>
-            Back
+            {t("sub.back")}
           </Button>
         </div>
       </div>
@@ -90,27 +91,21 @@ export function SubAddressPanel() {
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
           <Tag size={15} />
         </span>
-        Sub-addresses
+        {t("sub.title")}
       </h2>
       <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-        Hand out a different address per payer, shop or invoice. Every one of them belongs to this
-        same wallet — the funds land in your balance either way — and the name rides along with the
-        payment so you can tell who paid.
+        {t("sub.intro")}
       </p>
 
       <Field
-        label="Name"
-        hint={
-          problem
-            ? describeLabelProblem(problem)
-            : `Whoever pays you will see this. Up to ${MAX_LABEL_BYTES} characters.`
-        }
+        label={t("sub.name")}
+        hint={problem ? describeLabelProblem(problem) : t("sub.nameHint", { max: MAX_LABEL_BYTES })}
       >
         <div className="flex gap-2.5">
           <TextInput
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="coffee-stand, invoice-42, alice…"
+            placeholder={t("sub.namePlaceholder")}
             spellCheck={false}
             error={!!problem}
             onKeyDown={(e) => {
@@ -118,7 +113,7 @@ export function SubAddressPanel() {
             }}
           />
           <Button disabled={!label.trim() || !!problem} onClick={create}>
-            <Plus size={15} /> Create
+            <Plus size={15} /> {t("sub.create")}
           </Button>
         </div>
       </Field>
@@ -127,8 +122,8 @@ export function SubAddressPanel() {
         {store.subAddresses.length === 0 ? (
           <EmptyState
             icon={<Tag size={20} />}
-            title="No sub-addresses yet"
-            sub="Create one above to start accepting payments under a name you can recognise."
+            title={t("sub.emptyTitle")}
+            sub={t("sub.emptySub")}
           />
         ) : (
           <div className="space-y-2.5">
@@ -145,18 +140,18 @@ export function SubAddressPanel() {
                 </button>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Button size="sm" variant="outline" onClick={() => setShowing(sub)}>
-                    Show
+                    {t("sub.show")}
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    aria-label={`Forget ${sub.label}`}
+                    aria-label={t("sub.forgetAria", { label: sub.label })}
                     onClick={() => {
                       store.removeSubAddress(sub.label);
                       toast({
                         tone: "info",
-                        title: "Sub-address forgotten",
-                        message: "Anything already paid to it is still in your wallet.",
+                        title: t("sub.forgotten"),
+                        message: t("sub.forgottenNote"),
                       });
                     }}
                   >
@@ -170,8 +165,7 @@ export function SubAddressPanel() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-zinc-500">
-        These are not separate wallets. Each one shares this wallet's view and spend keys, so
-        forgetting a name here never puts funds out of reach.
+        {t("sub.footer")}
       </p>
     </div>
   );

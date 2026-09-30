@@ -17,6 +17,7 @@ import {
 } from "../lib/dapps";
 import { useToast } from "./toast";
 import { Badge, Button, EmptyState, Field, Segmented, TextInput, cn } from "./ui";
+import { t } from "../i18n";
 
 type Tab = "installed" | "explore";
 
@@ -50,11 +51,11 @@ export function DappStore() {
   const install = (entry: { url: string; name: string; description?: string; image?: string }) => {
     const normalised = normaliseUrl(entry.url);
     if (!normalised) {
-      toast({ tone: "error", title: "That doesn't look like a URL", message: entry.url });
+      toast({ tone: "error", title: t("dapps.notUrl"), message: entry.url });
       return false;
     }
     if (isInstalled(dapps, normalised)) {
-      toast({ tone: "info", title: "Already installed", message: hostOf(normalised) });
+      toast({ tone: "info", title: t("dapps.alreadyInstalled"), message: hostOf(normalised) });
       return false;
     }
     setDapps((prev) => [
@@ -67,13 +68,13 @@ export function DappStore() {
         addedAt: Date.now(),
       },
     ]);
-    toast({ tone: "success", title: "Installed", message: entry.name || hostOf(normalised) });
+    toast({ tone: "success", title: t("dapps.installedToast"), message: entry.name || hostOf(normalised) });
     return true;
   };
 
   const remove = (target: Dapp) => {
     setDapps((prev) => prev.filter((d) => d.url !== target.url));
-    toast({ tone: "info", title: "Removed", message: target.name });
+    toast({ tone: "info", title: t("dapps.removed"), message: target.name });
   };
 
   const filtered = useMemo(() => {
@@ -113,14 +114,14 @@ export function DappStore() {
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#9d6bff] to-[#6d28d9]">
             <Grid3x3 size={15} />
           </span>
-          Ootle apps
+          {t("dapps.title")}
         </h2>
         <Segmented<Tab>
           value={tab}
           onChange={setTab}
           options={[
-            { value: "installed", label: `Installed${dapps.length ? ` · ${dapps.length}` : ""}` },
-            { value: "explore", label: "Explore" },
+            { value: "installed", label: `${t("dapps.tabInstalled")}${dapps.length ? ` · ${dapps.length}` : ""}` },
+            { value: "explore", label: t("dapps.tabExplore") },
           ]}
         />
       </div>
@@ -134,13 +135,13 @@ export function DappStore() {
           <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search dApps…"
+            placeholder={t("dapps.search")}
             className="pl-9"
             spellCheck={false}
           />
         </div>
         <Button variant={adding ? "outline" : undefined} onClick={() => setAdding((s) => !s)}>
-          <Plus size={14} /> Add dApp
+          <Plus size={14} /> {t("dapps.addDapp")}
         </Button>
       </div>
 
@@ -149,7 +150,7 @@ export function DappStore() {
           className="mb-5 rounded-2xl border p-4"
           style={{ borderColor: "var(--tari-border)", background: "var(--tari-bg-input)" }}
         >
-          <Field label="dApp URL">
+          <Field label={t("dapps.url")}>
             <TextInput
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -160,7 +161,7 @@ export function DappStore() {
             />
           </Field>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="Name (optional)">
+            <Field label={t("dapps.nameOptional")}>
               <TextInput
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -168,8 +169,8 @@ export function DappStore() {
               />
             </Field>
             <Field
-              label="Image URL (optional)"
-              hint="Left blank, the tile tries the site's own icons."
+              label={t("dapps.imageOptional")}
+              hint={t("dapps.imageHint")}
             >
               <TextInput
                 value={image}
@@ -193,10 +194,10 @@ export function DappStore() {
               }}
               disabled={!url.trim()}
             >
-              <Plus size={14} /> Add
+              <Plus size={14} /> {t("dapps.add")}
             </Button>
             <Button variant="ghost" onClick={() => setAdding(false)}>
-              Cancel
+              {t("dapps.cancel")}
             </Button>
           </div>
         </div>
@@ -206,12 +207,8 @@ export function DappStore() {
         filtered.length === 0 ? (
           <EmptyState
             icon={<Grid3x3 size={20} />}
-            title={dapps.length === 0 ? "No dApps installed" : "Nothing matches that search"}
-            sub={
-              dapps.length === 0
-                ? "Add one by URL, or install from Explore."
-                : "Try a different name or host."
-            }
+            title={dapps.length === 0 ? t("dapps.noneInstalled") : t("dapps.noMatch")}
+            sub={dapps.length === 0 ? t("dapps.addHint") : t("dapps.tryDifferent")}
           />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -232,8 +229,8 @@ export function DappStore() {
       ) : catalogFiltered.length === 0 ? (
         <EmptyState
           icon={<Compass size={20} />}
-          title="Nothing matches that search"
-          sub="Explore is a short hand-written list — add anything else by URL."
+          title={t("dapps.noMatch")}
+          sub={t("dapps.exploreNote")}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -249,10 +246,7 @@ export function DappStore() {
       )}
 
       <p className="mt-6 border-t pt-3 text-[11px] leading-relaxed text-[var(--tari-text-dim)]" style={{ borderColor: "var(--tari-border)" }}>
-        dApps are ordinary websites opened in a new tab, stored only in this browser. Nothing is
-        installed by default and the list is never fetched from a server. A dApp cannot see your
-        seed or spend anything on its own — but treat one exactly as you would any site you connect
-        a wallet to.
+        {t("dapps.footer")}
       </p>
     </div>
   );
@@ -351,10 +345,10 @@ function DappCard({
       </div>
       <div className="flex gap-2 px-1 pb-1">
         <Button size="sm" className="flex-1" onClick={onOpen}>
-          <ExternalLink size={13} /> Open
+          <ExternalLink size={13} /> {t("dapps.open")}
         </Button>
         {installed && onRemove && (
-          <Button size="sm" variant="ghost" onClick={onRemove} aria-label={`Remove ${name}`}>
+          <Button size="sm" variant="ghost" onClick={onRemove} aria-label={t("dapps.removeAria", { name })}>
             <Trash2 size={13} />
           </Button>
         )}
@@ -393,11 +387,11 @@ function CatalogCard({
       <div className="px-1 pb-1">
         {installed ? (
           <Button size="sm" variant="outline" className="w-full" disabled>
-            <Check size={13} /> Installed
+            <Check size={13} /> {t("dapps.installed")}
           </Button>
         ) : (
           <Button size="sm" className="w-full" onClick={onInstall}>
-            <Plus size={13} /> Install
+            <Plus size={13} /> {t("dapps.install")}
           </Button>
         )}
       </div>

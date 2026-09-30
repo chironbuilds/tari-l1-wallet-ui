@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 const MICROS = 1_000_000n;
 
 export function formatMicro(micro: bigint): string {
@@ -32,12 +33,11 @@ export function humanizeFlag(s: string): string {
 export function timeAgo(ts: number): string {
   const d = Math.max(0, Date.now() - ts);
   const m = Math.floor(d / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("time.justNow");
+  if (m < 60) return t("time.minutesAgo", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const days = Math.floor(h / 24);
-  return `${days}d ago`;
+  if (h < 24) return t("time.hoursAgo", { n: h });
+  return t("time.daysAgo", { n: Math.floor(h / 24) });
 }
 
 export async function copyText(text: string): Promise<boolean> {

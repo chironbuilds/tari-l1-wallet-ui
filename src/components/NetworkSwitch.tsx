@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useStore } from "../store";
 import { L1_SWITCHABLE_NETWORKS, networkLabel, type NetworkId } from "../lib/tari";
 import { cn } from "./ui";
+import { useI18n } from "../i18n";
 
 /**
  * Flips the L1 wallet between MainNet and the testnet. The seed is the same on both; everything the
@@ -13,6 +14,7 @@ import { cn } from "./ui";
  */
 export function NetworkSwitch({ tone = "plain", className }: { tone?: "card" | "plain"; className?: string }) {
   const store = useStore();
+  const { t } = useI18n();
   const [switchingTo, setSwitchingTo] = useState<NetworkId | null>(null);
 
   const go = (next: NetworkId) => {
@@ -23,12 +25,12 @@ export function NetworkSwitch({ tone = "plain", className }: { tone?: "card" | "
     setSwitchingTo(null);
   };
 
-  const hint = store.hasPin && !store.walletLocked ? " You will be asked for your PIN again." : "";
+  const hint = store.hasPin && !store.walletLocked ? t("netswitch.pinAgain") : "";
 
   return (
     <div
       role="radiogroup"
-      aria-label="L1 network"
+      aria-label={t("netswitch.aria")}
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full p-0.5",
         tone === "card" ? "bg-black/25" : "border border-[var(--tari-border)] bg-[var(--tari-bg-input)]",
@@ -43,7 +45,7 @@ export function NetworkSwitch({ tone = "plain", className }: { tone?: "card" | "
             role="radio"
             aria-checked={active}
             disabled={switchingTo !== null}
-            title={active ? `On ${networkLabel(n.id)}` : `Switch the L1 wallet to ${networkLabel(n.id)}.${hint}`}
+            title={active ? t("netswitch.onNetwork", { network: networkLabel(n.id) }) : `${t("netswitch.switchTo", { network: networkLabel(n.id) })}${hint}`}
             onClick={() => go(n.id)}
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide uppercase transition-colors",
@@ -57,7 +59,7 @@ export function NetworkSwitch({ tone = "plain", className }: { tone?: "card" | "
             )}
           >
             {switchingTo === n.id && <Loader2 size={10} className="animate-spin" />}
-            {n.short}
+            {n.id === "mainnet" ? t("netswitch.mainnet") : t("netswitch.testnet")}
           </button>
         );
       })}

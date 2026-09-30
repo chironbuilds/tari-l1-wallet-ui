@@ -8,6 +8,7 @@ import {
 } from "react";
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { cn } from "./ui";
+import { t as translate } from "../i18n";
 
 type ToastTone = "success" | "error" | "info";
 
@@ -87,7 +88,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <button
               onClick={() => dismiss(t.id)}
               className="rounded-md p-1 text-[var(--tari-text-dim)] transition-colors hover:text-[var(--tari-text)]"
-              aria-label="Dismiss"
+              aria-label={translate("ui.dismiss")}
             >
               <X size={14} />
             </button>

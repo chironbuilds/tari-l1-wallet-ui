@@ -5,6 +5,7 @@ import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "
 import { truncMiddle } from "../lib/format";
 import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
+import { useI18n } from "../i18n";
 import { ActionTiles, Button, CopyButton, EmptyState } from "./ui";
 
 /**
@@ -23,6 +24,7 @@ export function L2Panel({
 }) {
   const store = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const [scanning, setScanning] = useState(false);
   const { identity, balances, loading, error } = store.l2;
 
@@ -40,8 +42,8 @@ export function L2Panel({
       const claimed = await store.scanL2PrivateFunds();
       toast({
         tone: claimed > 0 ? "success" : "info",
-        title: claimed > 0 ? `Found ${claimed} private output(s)` : "Nothing new found",
-        message: claimed > 0 ? "Your private balance has been updated." : "No unrecorded shielded funds on this account.",
+        title: claimed > 0 ? t("l2.foundOutputs", { n: claimed }) : t("l2.nothingNew"),
+        message: claimed > 0 ? t("l2.privateUpdated") : t("l2.noUnrecorded"),
       });
     } finally {
       setScanning(false);
@@ -60,9 +62,9 @@ export function L2Panel({
             >
               <Layers size={13} />
             </span>
-            <span className="text-sm font-bold">Ootle L2</span>
+            <span className="text-sm font-bold">{t("l2.ootleL2")}</span>
             <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase opacity-90">
-              testnet
+              {t("l2.testnet")}
             </span>
           </div>
           {identity && (
@@ -78,7 +80,7 @@ export function L2Panel({
           {loading && balances.length === 0 ? (
             <span className="inline-flex items-center gap-2 text-base font-bold opacity-80">
               <Loader2 size={16} className="animate-spin" />
-              Loading…
+              {t("common.loading")}
             </span>
           ) : (
             <>
@@ -87,15 +89,17 @@ export function L2Panel({
             </>
           )}
         </p>
-        <p className="mt-1 text-[11px] opacity-70">Revealed balance</p>
+        <p className="mt-1 text-[11px] opacity-70">{t("l2.revealedBalance")}</p>
 
         {/* Private funds sit in the same vault but are only visible to this account's view key, so
             they get their own line rather than being folded into the number above. */}
         {headline && headline.confidentialAmount > 0n && (
           <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-70">
             <Lock size={9} />
-            {formatResourceAmount(headline.confidentialAmount, headline.divisibility)}{" "}
-            {headline.symbol ?? "TARI"} private
+            {t("l2.privateSuffix", {
+              amount: formatResourceAmount(headline.confidentialAmount, headline.divisibility),
+              symbol: headline.symbol ?? "TARI",
+            })}
           </p>
         )}
 
@@ -104,7 +108,7 @@ export function L2Panel({
           className="mt-3 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
         >
           <span className="flex items-center gap-2 text-xs font-bold">
-            <ChevronLeft size={14} /> Back to Tari L1
+            <ChevronLeft size={14} /> {t("l2.backToL1")}
           </span>
           <span className="text-[10px] opacity-70">{networkLabel(store.network)}</span>
         </button>
@@ -116,27 +120,27 @@ export function L2Panel({
         >
           <span className="flex items-center gap-2 text-xs font-bold">
             {scanning ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-            {scanning ? "Scanning…" : "Find private funds"}
+            {scanning ? t("dash.scanning") : t("l2.findPrivate")}
           </span>
-          <span className="text-[10px] opacity-70">shielded</span>
+          <span className="text-[10px] opacity-70">{t("l2.shieldedTag")}</span>
         </button>
 
         <div className="mt-1.5 grid grid-cols-2 gap-1.5">
           <button
             onClick={() => onOpenPanel("l2shield")}
             disabled={!identity}
-            title="Move public funds into a private output"
+            title={t("l2.shieldTitle")}
             className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
           >
-            <EyeOff size={14} className="shrink-0" /> <span className="truncate">Shield</span>
+            <EyeOff size={14} className="shrink-0" /> <span className="truncate">{t("l2.shield")}</span>
           </button>
           <button
             onClick={() => onOpenPanel("l2unshield")}
             disabled={!identity}
-            title="Bring private funds back into your public balance"
+            title={t("l2.unshieldTitle")}
             className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
           >
-            <Eye size={14} className="shrink-0" /> <span className="truncate">Unshield</span>
+            <Eye size={14} className="shrink-0" /> <span className="truncate">{t("l2.unshield")}</span>
           </button>
         </div>
 
@@ -146,29 +150,29 @@ export function L2Panel({
           className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
         >
           <span className="flex items-center gap-2 text-xs font-bold">
-            <FileInput size={14} /> Claim an L1 burn
+            <FileInput size={14} /> {t("l2.claimBurn")}
           </span>
-          <span className="text-[10px] opacity-70">from proof</span>
+          <span className="text-[10px] opacity-70">{t("l2.fromProof")}</span>
         </button>
       </div>
 
       <ActionTiles
         actions={[
-          { label: "Send", icon: <ArrowUpRight size={16} />, onClick: () => onOpenPanel("l2send"), disabled: !identity },
-          { label: "Receive", icon: <ArrowDownLeft size={16} />, onClick: () => onOpenPanel("l2receive"), disabled: !identity },
-          { label: "Apps", icon: <Grid3x3 size={16} />, onClick: () => onOpenPanel("dapps"), title: "Ootle apps" },
+          { label: t("l2.send"), icon: <ArrowUpRight size={16} />, onClick: () => onOpenPanel("l2send"), disabled: !identity },
+          { label: t("l2.receive"), icon: <ArrowDownLeft size={16} />, onClick: () => onOpenPanel("l2receive"), disabled: !identity },
+          { label: t("l2.apps"), icon: <Grid3x3 size={16} />, onClick: () => onOpenPanel("dapps"), title: t("dash.ootleApps") },
         ]}
       />
 
       <div className="flex items-center justify-between px-1 pt-1">
-        <span className="text-sm font-bold text-[var(--tari-text)]">Balances</span>
+        <span className="text-sm font-bold text-[var(--tari-text)]">{t("l2.balances")}</span>
         <Button
           size="sm"
           variant="ghost"
           className="!px-1.5"
           loading={loading}
           onClick={() => store.refreshL2()}
-          aria-label="Refresh balances"
+          aria-label={t("l2.refreshBalances")}
         >
           <RefreshCw size={12} />
         </Button>
@@ -178,17 +182,17 @@ export function L2Panel({
         <div className="flex items-start gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-xs text-[var(--st-red)]">
           <TriangleAlert size={15} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-bold">Could not reach the Ootle indexer</p>
+            <p className="font-bold">{t("l2.indexerUnreachable")}</p>
             <p className="mt-1 break-all opacity-80">{error}</p>
           </div>
         </div>
       ) : loading && balances.length === 0 ? (
-        <p className="py-6 text-center text-xs text-zinc-500">Loading balances…</p>
+        <p className="py-6 text-center text-xs text-zinc-500">{t("l2.loadingBalances")}</p>
       ) : balances.length === 0 ? (
         <EmptyState
           icon={<Wallet size={20} />}
-          title="No balances"
-          sub="This account holds no Ootle funds yet. Burn tXTM from layer 1 to get some."
+          title={t("l2.noBalances")}
+          sub={t("l2.noFundsYet")}
         />
       ) : (
         <div className="space-y-2.5">
@@ -204,7 +208,7 @@ export function L2Panel({
                 <p className="mt-0.5 text-[11px] text-zinc-500">
                   {b.kind}
                   {b.confidentialDecryptFailures > 0
-                    ? ` · ${b.confidentialDecryptFailures} commitment(s) failed to decrypt`
+                    ? t("l2.decryptFailures", { n: b.confidentialDecryptFailures })
                     : ""}
                 </p>
               </div>
@@ -214,19 +218,19 @@ export function L2Panel({
                     ? // Indivisible by definition — the count itself, never run through
                       // formatResourceAmount()'s divisibility math (that produced "0" here before
                       // this vault kind was handled: NonFungible has no `.amount` field at all).
-                      `${b.amount.toString()} ${b.amount === 1n ? "NFT" : "NFTs"}`
+                      `${b.amount.toString()} ${b.amount === 1n ? t("l2.nft") : t("l2.nfts")}`
                     : formatResourceAmount(b.amount, b.divisibility)}
                 </p>
                 {b.kind === "NonFungible" && b.nonFungibleTokenIds && b.nonFungibleTokenIds.length > 0 && (
                   <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={b.nonFungibleTokenIds.join(", ")}>
                     {b.nonFungibleTokenIds.slice(0, 3).join(", ")}
-                    {b.nonFungibleTokenIds.length > 3 ? `, +${b.nonFungibleTokenIds.length - 3} more` : ""}
+                    {b.nonFungibleTokenIds.length > 3 ? t("l2.moreSuffix", { n: b.nonFungibleTokenIds.length - 3 }) : ""}
                   </p>
                 )}
                 {b.confidentialAmount > 0n && (
                   <p className="tabular mt-0.5 flex items-center justify-end gap-1 font-mono text-[11px] text-[var(--st-violet)]">
                     <Lock size={9} />
-                    {formatResourceAmount(b.confidentialAmount, b.divisibility)} private
+                    {t("l2.privateAmount", { amount: formatResourceAmount(b.confidentialAmount, b.divisibility) })}
                   </p>
                 )}
               </div>

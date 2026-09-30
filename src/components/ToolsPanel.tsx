@@ -11,6 +11,7 @@ import {
 import { copyText } from "../lib/format";
 import { useToast } from "./toast";
 import { Badge, Button, Card, Field, TextInput } from "./ui";
+import { t } from "../i18n";
 
 const te = new TextEncoder();
 
@@ -58,7 +59,7 @@ function MonoOut({ label, value }: { label: string; value?: string | null }) {
       <button
         onClick={() => value && void copyText(value)}
         className="w-full cursor-pointer rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3 text-left font-mono text-[11px] break-all text-[var(--st-cyan)] transition-colors hover:border-cyan-500/30"
-        title="Click to copy"
+        title={t("tools.clickToCopy")}
       >
         {value || <span className="text-zinc-700">—</span>}
       </button>
@@ -71,14 +72,14 @@ function HashLab() {
   const h256 = useMemo(() => blake2b256Hex(te.encode(msg)), [msg]);
   const h512 = useMemo(() => blake2b512Hex(te.encode(msg)), [msg]);
   return (
-    <LabCard title="Blake2b hashing" icon={<Hash size={14} />}>
-      <Field label="Message">
+    <LabCard title={t("tools.hashing")} icon={<Hash size={14} />}>
+      <Field label={t("tools.message")}>
         <TextInput value={msg} onChange={(e) => setMsg(e.target.value)} />
       </Field>
       <MonoOut label="blake2b-256" value={h256} />
       <MonoOut label="blake2b-512" value={h512} />
       <p className="text-[11px] leading-relaxed text-zinc-600">
-        The 512 digest is what Tari uses for Schnorr challenges.
+        {t("tools.hashNote")}
       </p>
     </LabCard>
   );
@@ -92,7 +93,7 @@ function SchnorrLab() {
   const [verified, setVerified] = useState<boolean | null>(null);
 
   return (
-    <LabCard title="Ristretto Schnorr signatures" icon={<Lock size={14} />}>
+    <LabCard title={t("tools.schnorr")} icon={<Lock size={14} />}>
       <Button
         variant="outline"
         className="w-full"
@@ -100,15 +101,15 @@ function SchnorrLab() {
           setKp(WasmKeyPair.generate());
           setSig(null);
           setVerified(null);
-          toast({ tone: "info", title: "New keypair generated" });
+          toast({ tone: "info", title: t("tools.keypairGenerated") });
         }}
       >
-        Generate keypair
+        {t("tools.generateKeypair")}
       </Button>
       {kp && (
         <>
-          <MonoOut label="public key" value={kp.publicKeyHex} />
-          <Field label="Message bytes (utf-8)">
+          <MonoOut label={t("tools.publicKey")} value={kp.publicKeyHex} />
+          <Field label={t("tools.messageBytes")}>
             <TextInput value={msg} onChange={(e) => { setMsg(e.target.value); setSig(null); setVerified(null); }} />
           </Field>
           <Button
@@ -120,16 +121,16 @@ function SchnorrLab() {
                 setSig(s);
                 setVerified(null);
               } catch (e) {
-                toast({ tone: "error", title: "Signing failed", message: String(e) });
+                toast({ tone: "error", title: t("tools.signingFailed"), message: String(e) });
               }
             }}
           >
-            Sign
+            {t("tools.sign")}
           </Button>
           {sig && (
             <>
-              <MonoOut label="public nonce" value={sig.publicNonceHex} />
-              <MonoOut label="signature" value={sig.signatureHex} />
+              <MonoOut label={t("tools.publicNonce")} value={sig.publicNonceHex} />
+              <MonoOut label={t("tools.signature")} value={sig.signatureHex} />
               <div className="flex items-center justify-between gap-3">
                 <Button
                   size="sm"
@@ -145,18 +146,18 @@ function SchnorrLab() {
                     )
                   }
                 >
-                  Verify
+                  {t("tools.verify")}
                 </Button>
                 {verified !== null && (
                   <Badge tone={verified ? "green" : "red"}>
-                    <ShieldCheck size={12} /> {verified ? "valid signature" : "invalid"}
+                    <ShieldCheck size={12} /> {verified ? t("tools.valid") : t("tools.invalid")}
                   </Badge>
                 )}
               </div>
             </>
           )}
           <p className="text-[11px] leading-relaxed text-zinc-600">
-            The secret key never leaves WASM memory — only hex is surfaced to the UI.
+            {t("tools.secretNote")}
           </p>
         </>
       )}
@@ -174,11 +175,11 @@ function CommitLab() {
   const micro = /^\d+$/.test(value.trim()) ? BigInt(value.trim()) : null;
 
   return (
-    <LabCard title="Pedersen commitments" icon={<FlaskConical size={14} />}>
-      <Field label="Blinding factor (hex)">
+    <LabCard title={t("tools.pedersen")} icon={<FlaskConical size={14} />}>
+      <Field label={t("tools.blinding")}>
         <TextInput mono value={blind} onChange={(e) => { setBlind(e.target.value); setCommitment(null); setOpens(null); }} spellCheck={false} />
       </Field>
-      <Field label="Value (µT)">
+      <Field label={t("tools.value")}>
         <TextInput inputMode="numeric" value={value} onChange={(e) => { setValue(e.target.value); setOpens(null); }} error={micro === null} />
       </Field>
       <Button
@@ -190,13 +191,13 @@ function CommitLab() {
             setCommitment(commitValue(blind.trim(), micro!));
             setOpens(null);
           } catch (e) {
-            toast({ tone: "error", title: "Commitment failed", message: String(e) });
+            toast({ tone: "error", title: t("tools.commitFailed"), message: String(e) });
           }
         }}
       >
-        Commit
+        {t("tools.commit")}
       </Button>
-      <MonoOut label="commitment" value={commitment} />
+      <MonoOut label={t("tools.commitment")} value={commitment} />
       {commitment && (
         <div className="flex items-center justify-between gap-3">
           <Button
@@ -204,15 +205,15 @@ function CommitLab() {
             variant="outline"
             onClick={() => setOpens(openValue(blind.trim(), micro!, commitment))}
           >
-            Open check
+            {t("tools.openCheck")}
           </Button>
           {opens !== null && (
-            <Badge tone={opens ? "green" : "red"}>{opens ? "opens ✓" : "does not open"}</Badge>
+            <Badge tone={opens ? "green" : "red"}>{opens ? t("tools.opens") : t("tools.doesNotOpen")}</Badge>
           )}
         </div>
       )}
       <p className="text-[11px] leading-relaxed text-zinc-600">
-        Same primitive that hides amounts in every Minotari output.
+        {t("tools.commitNote")}
       </p>
     </LabCard>
   );

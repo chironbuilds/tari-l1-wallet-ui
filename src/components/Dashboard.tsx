@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { isLocked, useStore } from "../store";
+import { useI18n } from "../i18n";
 import { formatMicro, timeAgo, truncMiddle } from "../lib/format";
 import { ActionTiles, Button, Card, CopyButton, Logo, NodeStatusDot } from "./ui";
 import { TowerBackground } from "./TowerBackground";
@@ -78,6 +79,7 @@ const THEME_KEY = "tari-l1-wallet/theme";
 
 export function Dashboard() {
   const store = useStore();
+  const { t } = useI18n();
   const [panel, setPanel] = useState<Panel>(null);
   const [dark, setDark] = useState(() => {
     try {
@@ -157,60 +159,60 @@ export function Dashboard() {
           }}
         >
           <div className="hidden md:block">
-            <button className="un-rail-btn" title="Settings" onClick={() => openPanel("settings")}>
+            <button className="un-rail-btn" title={t("dash.settings")} onClick={() => openPanel("settings")}>
               <Logo size={30} />
             </button>
           </div>
 
           <div className="flex flex-row items-center gap-1 md:flex-col md:gap-2.5">
-            <button className="un-rail-btn rail-active" title="Wallet" data-active="true">
+            <button className="un-rail-btn rail-active" title={t("dash.wallet")} data-active="true">
               <WalletIcon size={21} />
             </button>
             <button
               className="un-rail-btn"
-              title={store.layer === "L2" ? "Send on Ootle" : `Send ${symbol}`}
+              title={store.layer === "L2" ? t("dash.sendOnOotle") : t("dash.sendSymbol", { symbol })}
               onClick={() => openPanel(store.layer === "L2" ? "l2send" : "send")}
             >
               <Send size={20} />
             </button>
             <button
               className="un-rail-btn"
-              title={store.layer === "L2" ? "Receive on Ootle" : `Receive ${symbol}`}
+              title={store.layer === "L2" ? t("dash.receiveOnOotle") : t("dash.receiveSymbol", { symbol })}
               onClick={() => openPanel(store.layer === "L2" ? "l2receive" : "receive")}
             >
               <QrCode size={20} />
             </button>
             <button
               className="un-rail-btn rail-secondary"
-              title="Sub-addresses"
+              title={t("dash.subAddresses")}
               onClick={() => openPanel("subaddresses")}
             >
               <Tag size={20} />
             </button>
             <button
               className="un-rail-btn"
-              title="All activity"
+              title={t("dash.allActivity")}
               onClick={() => openPanel("activity")}
             >
               <History size={20} />
             </button>
             <button
               className="un-rail-btn"
-              title="Burn to Ootle"
+              title={t("dash.burnToOotle")}
               onClick={() => openPanel("burn")}
             >
               <Flame size={20} />
             </button>
             <button
               className="un-rail-btn rail-secondary"
-              title="Developer tools"
+              title={t("dash.devTools")}
               onClick={() => openPanel("tools")}
             >
               <Code2 size={20} />
             </button>
             <button
               className="un-rail-btn rail-secondary"
-              title="Ootle apps"
+              title={t("dash.ootleApps")}
               onClick={() => openPanel("dapps")}
             >
               <Grid3x3 size={20} />
@@ -220,14 +222,14 @@ export function Dashboard() {
           <div className="flex flex-row items-center gap-1 md:flex-col md:gap-2.5">
             <button
               className="un-rail-btn rail-secondary"
-              title="Toggle theme"
+              title={t("dash.toggleTheme")}
               onClick={() => setDark((d) => !d)}
             >
               {dark ? <Moon size={19} /> : <Sun size={19} />}
             </button>
             <button
               className="un-rail-btn"
-              title="Settings"
+              title={t("dash.settings")}
               onClick={() => openPanel("settings")}
             >
               <SettingsIcon size={21} />
@@ -235,7 +237,7 @@ export function Dashboard() {
             <button
               className="un-rail-btn"
               style={!store.hasPin ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
-              title={store.hasPin ? "Lock wallet" : "Set a PIN in Settings to enable Lock"}
+              title={store.hasPin ? t("dash.lockWallet") : t("dash.setPinToLock")}
               disabled={!store.hasPin}
               onClick={() => store.lock()}
             >
@@ -273,7 +275,7 @@ export function Dashboard() {
                 {store.scan && !store.scan.done ? (
                   <span className="inline-flex items-center gap-2 text-base font-bold opacity-80">
                     <Loader2 size={16} className="animate-spin" />
-                    Scanning…
+                    {t("dash.scanning")}
                   </span>
                 ) : (
                   <>
@@ -287,21 +289,21 @@ export function Dashboard() {
                   className="flex min-w-0 items-center gap-1.5 truncate text-[11px] opacity-70"
                   title={
                     store.nodeStatus === "online"
-                      ? `Connected to node${store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : ""}`
+                      ? `${t("dash.connectedToNode")}${store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : ""}`
                       : store.nodeStatus === "offline"
-                        ? "Not connected to any node"
-                        : "Checking node…"
+                        ? t("dash.notConnected")
+                        : t("dash.checkingNode")
                   }
                 >
                   <NodeStatusDot status={store.nodeStatus} size={7} />
-                  Available balance
+                  {t("dash.availableBalance")}
                 </p>
                 <NetworkSwitch tone="card" />
               </div>
               {store.pendingMicro > 0n && (
-                <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-60" title="Change from a broadcast transaction — spendable once it is mined and scanned">
+                <p className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-60" title={t("dash.confirmingHint")}>
                   <Loader2 size={9} className="animate-spin" />
-                  {formatMicro(store.pendingMicro)} {symbol} confirming
+                  {t("dash.confirming", { amount: formatMicro(store.pendingMicro), symbol })}
                 </p>
               )}
               {store.lockedMicro > 0n && (
@@ -309,14 +311,15 @@ export function Dashboard() {
                   className="tabular mt-0.5 flex items-center gap-1 text-[10px] opacity-60"
                   title={
                     nextUnlockHeight !== null && store.tipHeight !== null
-                      ? `Unlocks at block ${nextUnlockHeight.toLocaleString()} — ${(
-                          nextUnlockHeight - store.tipHeight
-                        ).toLocaleString()} blocks to go`
-                      : "Coinbase outputs mature 180 blocks after they are mined"
+                      ? t("dash.unlocksAt", {
+                          height: nextUnlockHeight.toLocaleString(),
+                          blocks: (nextUnlockHeight - store.tipHeight).toLocaleString(),
+                        })
+                      : t("dash.coinbaseMature")
                   }
                 >
                   <Lock size={9} />
-                  {formatMicro(store.lockedMicro)} {symbol} locked
+                  {t("dash.locked", { amount: formatMicro(store.lockedMicro), symbol })}
                 </p>
               )}
               <button
@@ -324,9 +327,9 @@ export function Dashboard() {
                 className="mt-3 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
               >
                 <span className="flex items-center gap-2 text-xs font-bold">
-                  <Layers size={14} /> Ootle (layer 2)
+                  <Layers size={14} /> {t("dash.ootleLayer2")}
                 </span>
-                <span className="text-[10px] opacity-70">Esmeralda testnet</span>
+                <span className="text-[10px] opacity-70">{t("common.esmeraldaTestnet")}</span>
               </button>
               {/* Only a nudge while the wallet is unprotected; once a PIN is set, settings stay
                   reachable from the rail's gear icon. */}
@@ -337,28 +340,28 @@ export function Dashboard() {
                 >
                   <span className="flex items-center gap-2 text-xs font-bold">
                     <AlertCircle size={14} className="text-[var(--st-amber)]" />
-                    Security & recovery
+                    {t("dash.securityRecovery")}
                   </span>
-                  <span className="text-[10px] opacity-70">No PIN set</span>
+                  <span className="text-[10px] opacity-70">{t("dash.noPinSet")}</span>
                 </button>
               )}
             </div>
 
             <ActionTiles
               actions={[
-                { label: "Send", icon: <ArrowUpRight size={16} />, onClick: () => openPanel("send") },
-                { label: "Receive", icon: <ArrowDownLeft size={16} />, onClick: () => openPanel("receive") },
-                { label: "Burn", icon: <Flame size={16} />, onClick: () => openPanel("burn") },
+                { label: t("dash.send"), icon: <ArrowUpRight size={16} />, onClick: () => openPanel("send") },
+                { label: t("dash.receive"), icon: <ArrowDownLeft size={16} />, onClick: () => openPanel("receive") },
+                { label: t("dash.burn"), icon: <Flame size={16} />, onClick: () => openPanel("burn") },
               ]}
             />
 
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-sm font-bold text-[var(--tari-text)]">Activity</span>
+              <span className="text-sm font-bold text-[var(--tari-text)]">{t("dash.activity")}</span>
               <button
                 onClick={() => openPanel("activity")}
                 className="flex items-center gap-0.5 text-xs font-semibold text-zinc-500 hover:text-[var(--tari-text)]"
               >
-                View all
+                {t("dash.viewAll")}
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
                   <path d="m9 6 6 6-6 6" />
                 </svg>
@@ -373,21 +376,21 @@ export function Dashboard() {
               {recent.length === 0 ? (
                 <div className="grid place-items-center py-6">
                   <span className="tx-pill px-5 py-2 text-xs font-bold text-[var(--tari-text)]">
-                    No transactions yet
+                    {t("dash.noTransactions")}
                   </span>
                 </div>
               ) : (
-                recent.slice(0, 6).map((t) => {
-                  const incoming = t.direction === "in";
+                recent.slice(0, 6).map((tx) => {
+                  const incoming = tx.direction === "in";
                   return (
                   <button
-                    key={t.id}
+                    key={tx.id}
                     onClick={() => openPanel("activity")}
                     className="tx-pill flex items-center gap-3 px-3 py-2.5 text-left hover:opacity-90"
                   >
                     <span
                       className={
-                        t.status === "failed"
+                        tx.status === "failed"
                           ? "grid size-7 shrink-0 place-items-center rounded-full border border-red-500/30 bg-red-500/10 text-red-500"
                           : incoming
                             ? "grid size-7 shrink-0 place-items-center rounded-full border border-[#06C983]/30 bg-[#06C983]/10 text-[#06C983]"
@@ -399,14 +402,14 @@ export function Dashboard() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-mono text-[11px] font-semibold text-[var(--tari-text)]">
                         {incoming
-                          ? t.paidTo && t.paidTo.length > 0
-                            ? t.paidTo.join(", ")
-                            : "Received"
-                          : truncMiddle(t.toBase58, 6, 4)}
+                          ? tx.paidTo && tx.paidTo.length > 0
+                            ? tx.paidTo.join(", ")
+                            : t("dash.received")
+                          : truncMiddle(tx.toBase58, 6, 4)}
                       </span>
                       <span className="block text-[10px] text-zinc-400">
-                        {timeAgo(t.createdAt)}
-                        {t.status === "pending" || t.status === "submitted" ? " · pending" : ""}
+                        {timeAgo(tx.createdAt)}
+                        {tx.status === "pending" || tx.status === "submitted" ? t("dash.pendingSuffix") : ""}
                       </span>
                     </span>
                     <span
@@ -416,8 +419,8 @@ export function Dashboard() {
                           : "tabular rounded-md bg-black/[0.06] px-2 py-0.5 font-mono text-[11px] font-bold text-[var(--tari-text)] dark:bg-white/10"
                       }
                     >
-                      {BigInt(t.amountMicro) > 0n
-                        ? `${incoming ? "+" : ""}${formatMicro(BigInt(t.amountMicro))} ${symbol}`
+                      {BigInt(tx.amountMicro) > 0n
+                        ? `${incoming ? "+" : ""}${formatMicro(BigInt(tx.amountMicro))} ${symbol}`
                         : "—"}
                     </span>
                   </button>
@@ -459,7 +462,7 @@ export function Dashboard() {
                 <button
                   onClick={() => setPanel(null)}
                   className="rounded-full p-1.5 text-[var(--tari-text-dim)] transition-colors hover:bg-[color-mix(in_srgb,var(--tari-text)_8%,transparent)] hover:text-[var(--tari-text)]"
-                  aria-label="Close panel"
+                  aria-label={t("dash.closePanel")}
                 >
                   <X size={15} />
                 </button>

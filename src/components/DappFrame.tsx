@@ -37,6 +37,7 @@ import {
 import { hostOf } from "../lib/dapps";
 import { OOTLE_NETWORK } from "../ootle";
 import { Badge, Button, Switch } from "./ui";
+import { t } from "../i18n";
 
 interface ApprovalState {
   id: string;
@@ -577,17 +578,17 @@ export function DappFrame({
         </span>
         {connected ? (
           <Badge tone="green">
-            <ShieldCheck size={11} /> connected
+            <ShieldCheck size={11} /> {t("frame.connected")}
           </Badge>
         ) : (
-          <Badge tone="slate">not connected</Badge>
+          <Badge tone="slate">{t("frame.notConnected")}</Badge>
         )}
         {/* Shown only when granted. A site without it is the ordinary case and needs no label; a
             site that can read the private balance is exactly what this chrome exists to make
             visible, and the wallet's own header is somewhere the dApp cannot paint over. */}
         {viewAccess && (
           <Badge tone="amber">
-            <Eye size={11} /> sees private balance
+            <Eye size={11} /> {t("frame.seesPrivate")}
           </Badge>
         )}
         <span className="ml-auto flex items-center gap-2">
@@ -595,7 +596,7 @@ export function DappFrame({
             <Button
               size="sm"
               variant="ghost"
-              title="Stop this dApp seeing your private balance, without disconnecting it"
+              title={t("frame.revokeViewTitle")}
               onClick={() => {
                 // Offered separately from Disconnect: wanting a dApp to keep working while it stops
                 // reading your confidential position is a reasonable thing to want, and folding the
@@ -604,7 +605,7 @@ export function DappFrame({
                 setViewAccess(false);
               }}
             >
-              Revoke view
+              {t("frame.revokeView")}
             </Button>
           )}
           {connected && (
@@ -621,15 +622,15 @@ export function DappFrame({
                 emitEvent("accountsChanged", []);
               }}
             >
-              Disconnect
+              {t("frame.disconnect")}
             </Button>
           )}
           <Button
             size="sm"
             variant="outline"
             onClick={() => setExpanded((e) => !e)}
-            title={expanded ? "Exit full screen (Esc)" : "Full screen"}
-            aria-label={expanded ? "Exit full screen" : "Full screen"}
+            title={expanded ? t("frame.exitFullTitle") : t("frame.full")}
+            aria-label={expanded ? t("frame.exitFull") : t("frame.full")}
           >
             {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
           </Button>
@@ -638,9 +639,9 @@ export function DappFrame({
             variant="outline"
             onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
           >
-            <ExternalLink size={13} /> Tab
+            <ExternalLink size={13} /> {t("frame.tab")}
           </Button>
-          <Button size="sm" variant="ghost" onClick={onClose} aria-label="Close dApp">
+          <Button size="sm" variant="ghost" onClick={onClose} aria-label={t("frame.closeDapp")}>
             <X size={14} />
           </Button>
         </span>
@@ -688,19 +689,16 @@ export function DappFrame({
           >
             <div>
               <ShieldAlert size={22} className="mx-auto mb-2 text-[var(--st-amber)]" />
-              <p className="font-semibold text-[var(--tari-text)]">This dApp refuses to embed</p>
+              <p className="font-semibold text-[var(--tari-text)]">{t("frame.refusesEmbed")}</p>
               <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-[var(--tari-text-dim)]">
-                {hostOf(url)} sends <code>X-Frame-Options</code> or a{" "}
-                <code>frame-ancestors</code> policy that blocks other sites from framing it. Open it
-                in a tab instead — the provider is only available inside the wallet, so it will run
-                without one.
+                {t("frame.refusesEmbedBody", { host: hostOf(url) })}
               </p>
               <Button
                 size="sm"
                 className="mt-4"
                 onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
               >
-                <ExternalLink size={13} /> Open in a tab
+                <ExternalLink size={13} /> {t("frame.openInTab")}
               </Button>
             </div>
           </div>
@@ -714,10 +712,10 @@ export function DappFrame({
             >
               <p className="text-sm font-bold text-[var(--tari-text)]">
                 {approval.tone === "connect"
-                  ? "Connect to this dApp?"
+                  ? t("frame.askConnect")
                   : approval.tone === "view"
-                    ? "Let this dApp see your private balance?"
-                    : "Approve this request?"}
+                    ? t("frame.askView")
+                    : t("frame.askApprove")}
               </p>
               <p className="mt-1 font-mono text-[11px] break-all text-[var(--tari-text-dim)]">
                 {origin}
@@ -735,11 +733,12 @@ export function DappFrame({
               </ul>
               {approval.feeChoice && (
                 <div className="mt-4 rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-2.5">
-                  <p className="mb-1.5 text-[11px] font-semibold text-[var(--tari-text-dim)]">Fee payment</p>
+                  <p className="mb-1.5 text-[11px] font-semibold text-[var(--tari-text-dim)]">{t("frame.feePayment")}</p>
                   {approval.feeChoice.enforced ? (
                     <p className="text-xs text-[var(--tari-text)]">
-                      This site requires a <strong>{approval.feeChoice.initial}</strong> fee for this
-                      request — it can't be changed here. Reject if you don't want that.
+                      {t("frame.feeEnforced", {
+                        kind: approval.feeChoice.initial === "private" ? t("frame.feePrivate") : t("frame.feeTransparent"),
+                      })}
                     </p>
                   ) : (
                     <Switch
@@ -749,8 +748,8 @@ export function DappFrame({
                         feeTypeChoiceRef.current = next;
                         setFeeTypeDisplay(next);
                       }}
-                      offLabel="Transparent"
-                      onLabel="Private"
+                      offLabel={t("frame.transparent")}
+                      onLabel={t("frame.private")}
                     />
                   )}
                 </div>
@@ -761,21 +760,20 @@ export function DappFrame({
                   time it appears on something that matters. */}
               {approval.tone === "spend" && (
                 <p className="mt-4 rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 p-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
-                  This spends real funds. Approve only if you started this action yourself.
+                  {t("frame.spendWarning")}
                 </p>
               )}
               {approval.tone === "view" && (
                 <p className="mt-4 rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 p-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
-                  This does not move any funds. It lets the site read what you hold privately, until
-                  you revoke it.
+                  {t("frame.viewWarning")}
                 </p>
               )}
               <div className="mt-4 flex gap-2.5">
                 <Button className="flex-1" onClick={() => approval.decide(true)}>
-                  {approval.tone === "connect" ? "Connect" : approval.tone === "view" ? "Show my balance" : "Approve"}
+                  {approval.tone === "connect" ? t("frame.connect") : approval.tone === "view" ? t("frame.showBalance") : t("frame.approve")}
                 </Button>
                 <Button variant="outline" className="flex-1" onClick={() => approval.decide(false)}>
-                  {approval.tone === "spend" ? "Reject" : "Deny"}
+                  {approval.tone === "spend" ? t("frame.reject") : t("frame.deny")}
                 </Button>
               </div>
             </div>

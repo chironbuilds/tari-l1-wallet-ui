@@ -13,6 +13,7 @@
  */
 
 import { summarizeInstructionArray } from "../ootle/instructionSummary";
+import { t } from "../i18n";
 
 export const PROTOCOL = "tari-dapp-bridge/1";
 
@@ -526,10 +527,10 @@ export function describeRequest(method: BridgeMethod, params: Record<string, unk
   switch (method) {
     case "tari_requestAccounts":
       return [
-        "View your Ootle account address",
-        "View your public token balances",
-        "Ask you to approve transactions (each one separately)",
-        "It will NOT see your private balance — that is a separate request",
+        t("approve.accountsView"),
+        t("approve.accountsBalances"),
+        t("approve.accountsApprove"),
+        t("approve.accountsNoPrivate"),
       ];
     case "tari_requestViewAccess":
       // Spelled out in both directions, because "view access" on its own reads as harmless and the
@@ -538,12 +539,12 @@ export function describeRequest(method: BridgeMethod, params: Record<string, unk
       // spend" half matters as much: a user who assumes otherwise refuses grants they'd be fine
       // with.
       return [
-        "See your PRIVATE balance — what you hold in shielded outputs, hidden from everyone else on-chain",
-        "See the individual shielded outputs behind that balance",
-        "Scan for private payments sent to you",
-        "It will NOT be able to spend anything — every transaction still needs your approval",
-        "It will NOT receive your keys, and cannot read payments sent to anyone else",
-        "You can revoke this at any time without disconnecting the site",
+        t("approve.viewPrivate"),
+        t("approve.viewOutputs"),
+        t("approve.viewScan"),
+        t("approve.viewNoSpend"),
+        t("approve.viewNoKeys"),
+        t("approve.viewRevocable"),
       ];
     case "tari_signOwnershipChallenge":
       // The challenge is shown verbatim -- it's the one thing a human is actually evaluating here.
@@ -551,24 +552,24 @@ export function describeRequest(method: BridgeMethod, params: Record<string, unk
       // never from anything the site supplies, but that's a fact about how it's protected, not
       // what the user is being asked to read and approve.
       return [
-        "Prove you control a specific private output — this does NOT spend or move anything",
-        `Sign exactly this text: "${String(params.challenge ?? "")}"`,
-        `Output: ${shortId(String(params.substateId ?? ""))}`,
-        "It will NOT receive your keys",
+        t("approve.proveOutput"),
+        t("approve.signExactly", { text: String(params.challenge ?? "") }),
+        t("approve.output", { id: shortId(String(params.substateId ?? "")) }),
+        t("approve.noKeys"),
       ];
     case "tari_signWalletOwnershipChallenge":
       return [
-        "Prove you hold this wallet address — this does NOT spend or move anything",
-        `Sign exactly this text: "${String(params.challenge ?? "")}"`,
-        "It will NOT receive your keys",
+        t("approve.proveWallet"),
+        t("approve.signExactly", { text: String(params.challenge ?? "") }),
+        t("approve.noKeys"),
       ];
     case "tari_createTransactionRequest":
       return describeOperation(params as unknown as TransactionRequestOperation);
     case "tari_signAndSubmitTransaction": {
       const instructions = summarizeInstructionArray(params.instructions);
       return [
-        `Sign and submit a transaction with ${instructions.length} instruction${instructions.length === 1 ? "" : "s"}`,
-        `Max fee ${String(params.maxFee ?? "5000")}`,
+        t(instructions.length === 1 ? "approve.signSubmitOne" : "approve.signSubmitMany", { n: instructions.length }),
+        t("approve.maxFee", { fee: String(params.maxFee ?? "5000") }),
         ...instructions,
       ];
     }
@@ -592,7 +593,7 @@ function shortId(value: string): string {
 function promiseLines(minimumValuePromise: string | undefined, subject: string): string[] {
   if (minimumValuePromise === undefined || BigInt(minimumValuePromise) === 0n) return [];
   return [
-    `PUBLICLY records that ${subject} is worth at least ${minimumValuePromise} — permanently, on-chain, visible to everyone and not just this site`,
+    t("approve.promise", { subject, amount: minimumValuePromise }),
   ];
 }
 
@@ -610,65 +611,73 @@ export function describeOperation(operation: TransactionRequestOperation): strin
       return describeRequest("tari_signAndSubmitTransaction", operation as unknown as Record<string, unknown>);
     case "withdrawStealthAndExecute":
       return [
-        `Reveal ${operation.amount} of ${shortId(operation.resourceAddress)} for use in this transaction`,
+        t("approve.revealFor", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
         ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "redeemStealthOutputAndExecute":
       return [
-        `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
+        t("approve.redeem", {
+          commitment: shortId(operation.commitmentHex),
+          amount: operation.revealedAmount,
+          resource: shortId(operation.resourceAddress),
+        }),
         ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "redeemStealthOutputWithPrivateFee":
       return [
-        `Redeem a stealth token (${shortId(operation.commitmentHex)}, ${operation.revealedAmount} of ${shortId(operation.resourceAddress)}) for use in this transaction`,
-        `Pay the fee from a separate stealth UTXO (${shortId(operation.feeCommitmentHex)}) — this wallet's address is never revealed`,
+        t("approve.redeem", {
+          commitment: shortId(operation.commitmentHex),
+          amount: operation.revealedAmount,
+          resource: shortId(operation.resourceAddress),
+        }),
+        t("approve.privateFee", { commitment: shortId(operation.feeCommitmentHex) }),
         ...summarizeInstructionArray(operation.followUpInstructions),
       ];
     case "shield":
       return [
-        `Move ${operation.amount} of ${shortId(operation.resourceAddress)} from your PUBLIC balance into your PRIVATE balance`,
-        "Stays in this account — nothing leaves your wallet",
+        t("approve.shield", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
+        t("approve.staysHere"),
         // Stated outright, not left to be inferred from a field name. Shielding is the act of making
         // value invisible; a promise puts a permanent public floor back on it, for everyone, for as
         // long as the output lives. Someone approving a "move to private" must not discover
         // afterwards that they also published a number.
-        ...promiseLines(operation.minimumValuePromise, "this new private output"),
+        ...promiseLines(operation.minimumValuePromise, t("approve.promiseNewOutput")),
       ];
     case "depositConfidential":
       return [
-        `Move ${operation.amount} of ${shortId(operation.resourceAddress)} from your PUBLIC balance into a CONFIDENTIAL vault`,
-        "Stays in this account — nothing leaves your wallet",
-        "Different privacy mechanism from \"shield\" — only works if this resource was created as a Confidential-type resource",
+        t("approve.depositConfidential", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
+        t("approve.staysHere"),
+        t("approve.confidentialNote"),
       ];
     case "unshield":
       return [
-        `Move ${operation.revealedAmount} of ${shortId(operation.resourceAddress)} from your PRIVATE balance back into your PUBLIC balance`,
-        "This amount becomes visible on-chain",
+        t("approve.unshield", { amount: operation.revealedAmount, resource: shortId(operation.resourceAddress) }),
+        t("approve.becomesVisible"),
       ];
     case "sendPrivately":
       return [
-        `Send ${operation.amount} of ${shortId(operation.resourceAddress)} privately`,
-        `To ${shortId(operation.recipientWalletAddress)}`,
-        "The amount and recipient stay hidden on-chain",
-        ...promiseLines(operation.minimumValuePromise, "the recipient's new output"),
+        t("approve.sendPrivately", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
+        t("approve.to", { address: shortId(operation.recipientWalletAddress) }),
+        t("approve.hiddenOnChain"),
+        ...promiseLines(operation.minimumValuePromise, t("approve.promiseRecipientOutput")),
       ];
     case "htlcFund":
       return [
-        `Lock ${operation.amount} of ${shortId(operation.resourceAddress)} in a hash-timelock contract`,
-        `Claimable by ${shortId(operation.claimantWalletAddress)} with the matching secret, before epoch ${operation.refundEpoch}`,
-        "Refundable back to you after that epoch",
+        t("approve.htlcLock", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
+        t("approve.htlcClaimable", { claimant: shortId(operation.claimantWalletAddress), epoch: operation.refundEpoch }),
+        t("approve.htlcRefundable"),
       ];
     case "htlcClaim":
       return [
-        `Claim an HTLC-locked private payment of ${shortId(operation.resourceAddress)}`,
-        "Reveals your secret to the network — the counterparty can see it once this lands",
+        t("approve.htlcClaim", { resource: shortId(operation.resourceAddress) }),
+        t("approve.htlcRevealsSecret"),
       ];
     case "htlcRefund":
       return [
-        `Refund ${operation.amount} of ${shortId(operation.resourceAddress)} from an HTLC you funded`,
-        "Only succeeds once its refund epoch has passed",
+        t("approve.htlcRefund", { amount: operation.amount, resource: shortId(operation.resourceAddress) }),
+        t("approve.htlcRefundAfter"),
       ];
     default:
-      return ["Unrecognised operation — reject this unless you know exactly what it is"];
+      return [t("approve.unrecognised")];
   }
 }

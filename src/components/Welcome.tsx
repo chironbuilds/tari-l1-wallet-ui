@@ -6,12 +6,15 @@ import { MIN_PIN_LENGTH } from "../lib/pinLock";
 import { Button, Card, Field, Logo, Segmented, TextInput } from "./ui";
 import { useToast } from "./toast";
 import type { NetworkId } from "../lib/tari";
+import { useI18n } from "../i18n";
+import { LanguageSwitch } from "./LanguageSwitch";
 
 type ImportMode = "create" | "seed" | "backup";
 
 export function Welcome() {
   const { createWallet, restoreWallet, setWalletBirthday } = useStore();
   const toast = useToast();
+  const { t } = useI18n();
   const [mode, setMode] = useState<ImportMode>("create");
   const [network, setNetwork] = useState<NetworkId>("mainnet");
   const [backup, setBackup] = useState("");
@@ -27,12 +30,12 @@ export function Welcome() {
     setBusy(true);
     setError(null);
     if (pin.length < MIN_PIN_LENGTH) {
-      setError(`Choose a PIN of at least ${MIN_PIN_LENGTH} characters — it locks and unlocks this wallet.`);
+      setError(t("welcome.errPinShort", { min: MIN_PIN_LENGTH }));
       setBusy(false);
       return;
     }
     if (pin !== pinConfirm) {
-      setError("PINs don't match.");
+      setError(t("welcome.errPinMismatch"));
       setBusy(false);
       return;
     }
@@ -42,12 +45,12 @@ export function Welcome() {
         await createWallet(network, pin);
         toast({
           tone: "success",
-          title: "Wallet created",
-          message: "Reveal your 24-word phrase in Settings → Recovery phrase.",
+          title: t("welcome.createdTitle"),
+          message: t("welcome.createdMessage"),
         });
       } else if (mode === "seed") {
         if (!seedInput.trim()) {
-          setError("Enter your 24-word recovery phrase.");
+          setError(t("welcome.errSeedEmpty"));
           setBusy(false);
           return;
         }
@@ -61,12 +64,12 @@ export function Welcome() {
         setWalletBirthday(birthdayMs);
         toast({
           tone: "success",
-          title: "Wallet restored",
-          message: "Scanning the chain from the wallet's creation date. Progress is shown in Settings → Chain scan.",
+          title: t("welcome.restoredTitle"),
+          message: t("welcome.restoredScanning"),
         });
       } else {
         if (!backup.trim()) {
-          setError("Paste your enciphered backup hex first.");
+          setError(t("welcome.errBackupEmpty"));
           setBusy(false);
           return;
         }
@@ -76,13 +79,13 @@ export function Welcome() {
           setBusy(false);
           return;
         }
-        toast({ tone: "success", title: "Wallet restored" });
+        toast({ tone: "success", title: t("welcome.restoredTitle") });
       }
     } catch (e) {
       setError(
         e instanceof Error
           ? e.message
-          : "Could not import this recovery phrase — check the words and try again.",
+          : t("welcome.errSeedImport"),
       );
     }
     setBusy(false);
@@ -93,6 +96,7 @@ export function Welcome() {
       className="relative z-10 flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-10"
       style={{ background: "var(--tari-bg)" }}
     >
+      <LanguageSwitch compact className="absolute top-4 right-4" />
       <div className="logo-pulse mb-8">
         <Logo size={72} />
       </div>
@@ -100,12 +104,9 @@ export function Welcome() {
       <Card className="animate-fade-up w-full max-w-md p-7 sm:p-8">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-extrabold tracking-tight text-[var(--tari-text)]">
-            Tari L1 Wallet
+            {t("welcome.title")}
           </h1>
-          <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
-            Self-custodial Minotari wallet. Keys are generated and transactions are signed locally in your
-            browser.
-          </p>
+          <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">{t("welcome.subtitle")}</p>
         </div>
 
         <Segmented
@@ -117,7 +118,7 @@ export function Welcome() {
               value: "create",
               label: (
                 <span className="flex items-center justify-center gap-1.5">
-                  <Plus size={13} /> Create
+                  <Plus size={13} /> {t("welcome.modeCreate")}
                 </span>
               ),
             },
@@ -125,7 +126,7 @@ export function Welcome() {
               value: "seed",
               label: (
                 <span className="flex items-center justify-center gap-1.5">
-                  <ShieldCheck size={13} /> Seed phrase
+                  <ShieldCheck size={13} /> {t("welcome.modeSeed")}
                 </span>
               ),
             },
@@ -133,7 +134,7 @@ export function Welcome() {
               value: "backup",
               label: (
                 <span className="flex items-center justify-center gap-1.5">
-                  <KeyRound size={13} /> Backup hex
+                  <KeyRound size={13} /> {t("welcome.modeBackup")}
                 </span>
               ),
             },
@@ -143,13 +144,13 @@ export function Welcome() {
         {mode === "seed" && (
           <div className="animate-fade-up mb-5">
             <Field
-              label="24-word recovery phrase"
+              label={t("welcome.seedLabel")}
               hint={
                 seedInput.trim()
                   ? seedPlausible
-                    ? "Valid Tari recovery phrase"
-                    : "Not a valid 24-word Tari recovery phrase"
-                  : "Words separated by spaces · any of Tari's 7 languages"
+                    ? t("welcome.seedValid")
+                    : t("welcome.seedInvalid")
+                  : t("welcome.seedHint")
               }
             >
               <textarea
@@ -157,7 +158,7 @@ export function Welcome() {
                 onChange={(e) => setSeedInput(e.target.value)}
                 rows={3}
                 spellCheck={false}
-                placeholder="word one word two …"
+                placeholder={t("welcome.seedPlaceholder")}
                 className="w-full rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 text-sm text-[var(--tari-text)] placeholder-[var(--tari-text-dim)] focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none"
               />
             </Field>
@@ -166,13 +167,13 @@ export function Welcome() {
 
         {mode === "backup" && (
           <div className="animate-fade-up mb-5">
-            <Field label="Enciphered backup hex">
+            <Field label={t("welcome.backupLabel")}>
               <textarea
                 value={backup}
                 onChange={(e) => setBackup(e.target.value)}
                 rows={4}
                 spellCheck={false}
-                placeholder="Paste the hex blob exported from this wallet…"
+                placeholder={t("welcome.backupPlaceholder")}
                 className="w-full rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-3.5 font-mono text-[12px] break-all text-[var(--tari-text)] placeholder-[var(--tari-text-dim)] focus:border-[#9330ff]/60 focus:ring-2 focus:ring-[#9330ff]/30 focus:outline-none"
               />
             </Field>
@@ -180,26 +181,22 @@ export function Welcome() {
         )}
 
         <Field
-          label="Network"
-          hint={
-            network === "mainnet"
-              ? "Real XTM."
-              : "Test network with valueless tXTM. Burns here can be claimed on the Ootle testnet."
-          }
+          label={t("welcome.network")}
+          hint={network === "mainnet" ? t("welcome.networkMainnetHint") : t("welcome.networkTestnetHint")}
         >
           <Segmented
             value={network}
             onChange={(v) => setNetwork(v as NetworkId)}
             className="flex w-full"
             options={[
-              { value: "mainnet", label: "MainNet" },
-              { value: "esmeralda", label: "Esmeralda testnet" },
+              { value: "mainnet", label: t("common.mainnet") },
+              { value: "esmeralda", label: t("common.esmeraldaTestnet") },
             ]}
           />
         </Field>
 
         <div className="animate-fade-up mt-5 grid grid-cols-2 gap-3">
-          <Field label="Choose a PIN" hint={`At least ${MIN_PIN_LENGTH} characters`}>
+          <Field label={t("welcome.choosePin")} hint={t("welcome.pinHint", { min: MIN_PIN_LENGTH })}>
             <TextInput
               type="password"
               inputMode="numeric"
@@ -208,7 +205,7 @@ export function Welcome() {
               placeholder="••••"
             />
           </Field>
-          <Field label="Confirm PIN">
+          <Field label={t("welcome.confirmPin")}>
             <TextInput
               type="password"
               inputMode="numeric"
@@ -220,8 +217,7 @@ export function Welcome() {
         </div>
         <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-zinc-600">
           <Lock size={12} className="mt-0.5 shrink-0" />
-          Encrypts your seed on this device and lets you lock the wallet without erasing it.
-          There's no reset — losing both your PIN and your recovery phrase loses the funds.
+          {t("welcome.pinNote")}
         </p>
 
         {error && (
@@ -233,12 +229,12 @@ export function Welcome() {
 
           <Button size="lg" className="mt-6 w-full" loading={busy} onClick={go}>
             {busy
-              ? "Deriving keys…"
+              ? t("welcome.deriving")
               : mode === "create"
-                ? "Create new wallet"
+                ? t("welcome.create")
                 : mode === "seed"
-                  ? "Restore from seed phrase"
-                  : "Restore from backup hex"}
+                  ? t("welcome.restoreSeed")
+                  : t("welcome.restoreBackup")}
           </Button>
 
       </Card>
