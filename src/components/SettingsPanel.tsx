@@ -299,6 +299,8 @@ function SettingsContent() {
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
+      {/* Two independent columns, so a short card never leaves a gap beside a tall one. */}
+      <div className="grid content-start gap-5">
       <Card className="h-fit p-6 sm:p-7">
         <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
           <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
@@ -328,89 +330,6 @@ function SettingsContent() {
           </Button>
           {revealWords && words && (
             <CopyButton text={words.join(" ")} label="Copy phrase" />
-          )}
-        </div>
-      </Card>
-
-      <Card className="h-fit p-6 sm:p-7">
-        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
-          <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
-            <Lock size={15} />
-          </span>
-          Lock
-        </h3>
-        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
-          {store.hasPin
-            ? "Your seed is encrypted on this device with your PIN. Locking hides the wallet and clears the decrypted seed from memory without erasing anything — unlock with the same PIN."
-            : "Set a PIN to encrypt your seed on this device and enable locking. Without a PIN, this wallet can only be erased, not locked."}
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          {store.hasPin && (
-            <Field label="Current PIN">
-              <TextInput
-                type="password"
-                inputMode="numeric"
-                value={oldPin}
-                onChange={(e) => setOldPin(e.target.value)}
-              />
-            </Field>
-          )}
-          <Field label={store.hasPin ? "New PIN" : "Choose a PIN"}>
-            <TextInput
-              type="password"
-              inputMode="numeric"
-              value={newPin}
-              onChange={(e) => setNewPin(e.target.value)}
-            />
-          </Field>
-          <Field label="Confirm">
-            <TextInput
-              type="password"
-              inputMode="numeric"
-              value={newPinConfirm}
-              onChange={(e) => setNewPinConfirm(e.target.value)}
-            />
-          </Field>
-          <Button variant="outline" onClick={() => void submitPin()} disabled={pinBusy || !newPin}>
-            {pinBusy && <Loader2 size={14} className="animate-spin" />}
-            <KeyRound size={14} /> {store.hasPin ? "Change PIN" : "Set PIN"}
-          </Button>
-        </div>
-        {pinError && <p className="mt-3 text-xs text-[var(--st-red)]">{pinError}</p>}
-
-        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
-          <Field label="Auto-lock after inactivity">
-            <Segmented
-              value={String(store.autoLockMinutes)}
-              onChange={(v) => store.setAutoLockMinutes(Number(v))}
-              options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-            />
-          </Field>
-        </div>
-
-        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
-          <Field label="Default fee privacy (Ootle / L2)">
-            <Switch
-              checked={store.feePrivacyDefault === "private"}
-              onChange={(v) => store.setFeePrivacyDefault(v ? "private" : "transparent")}
-              offLabel="Transparent"
-              onLabel="Private"
-            />
-          </Field>
-          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-            Private pays the fee from a shielded UTXO instead of your revealed balance, so the
-            transaction doesn't reveal this account on-chain. Requires some TARI already shielded —
-            see the Private balance panel. A connected dApp can override this per request, or
-            require one or the other outright.
-          </p>
-        </div>
-
-        <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--tari-border)] pt-4">
-          <Button variant="outline" size="sm" disabled={!store.hasPin} onClick={() => store.lock()}>
-            <Clock size={14} /> Lock now
-          </Button>
-          {!store.hasPin && (
-            <span className="text-[11px] text-zinc-600">Set a PIN above to enable this.</span>
           )}
         </div>
       </Card>
@@ -452,6 +371,159 @@ function SettingsContent() {
           )}
         </div>
       </Card>
+      </div>
+
+      <Card className="h-fit p-6 sm:p-7">
+        <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
+          <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
+            <Lock size={15} />
+          </span>
+          Lock
+        </h3>
+        <p className="mb-5 text-xs leading-relaxed text-zinc-500">
+          {store.hasPin
+            ? "Your seed is encrypted on this device with your PIN. Locking hides the wallet and clears the decrypted seed from memory without erasing anything — unlock with the same PIN."
+            : "Set a PIN to encrypt your seed on this device and enable locking. Without a PIN, this wallet can only be erased, not locked."}
+        </p>
+        <div className={`grid gap-3 ${store.hasPin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {store.hasPin && (
+            <Field label="Current PIN">
+              <TextInput
+                type="password"
+                inputMode="numeric"
+                value={oldPin}
+                onChange={(e) => setOldPin(e.target.value)}
+              />
+            </Field>
+          )}
+          <Field label={store.hasPin ? "New PIN" : "Choose a PIN"}>
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value)}
+            />
+          </Field>
+          <Field label="Confirm">
+            <TextInput
+              type="password"
+              inputMode="numeric"
+              value={newPinConfirm}
+              onChange={(e) => setNewPinConfirm(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="mt-3">
+          <Button variant="outline" onClick={() => void submitPin()} disabled={pinBusy || !newPin}>
+            {pinBusy && <Loader2 size={14} className="animate-spin" />}
+            <KeyRound size={14} /> {store.hasPin ? "Change PIN" : "Set PIN"}
+          </Button>
+        </div>
+        {pinError && <p className="mt-3 text-xs text-[var(--st-red)]">{pinError}</p>}
+
+        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
+          <Field label="Auto-lock after inactivity">
+            <Segmented
+              value={String(store.autoLockMinutes)}
+              onChange={(v) => store.setAutoLockMinutes(Number(v))}
+              options={AUTO_LOCK_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
+              fill
+            />
+          </Field>
+        </div>
+
+        <div className="mt-5 border-t border-[var(--tari-border)] pt-4">
+          <Field label="Default fee privacy (Ootle / L2)">
+            <Switch
+              checked={store.feePrivacyDefault === "private"}
+              onChange={(v) => store.setFeePrivacyDefault(v ? "private" : "transparent")}
+              offLabel="Transparent"
+              onLabel="Private"
+            />
+          </Field>
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+            Private pays the fee from a shielded UTXO instead of your revealed balance, so the
+            transaction doesn't reveal this account on-chain. Requires some TARI already shielded —
+            see the Private balance panel. A connected dApp can override this per request, or
+            require one or the other outright.
+          </p>
+        </div>
+
+        <div className="mt-5 flex items-center gap-2.5 border-t border-[var(--tari-border)] pt-4">
+          <Button variant="outline" size="sm" disabled={!store.hasPin} onClick={() => store.lock()}>
+            <Clock size={14} /> Lock now
+          </Button>
+          {!store.hasPin && (
+            <span className="text-[11px] text-zinc-600">Set a PIN above to enable this.</span>
+          )}
+        </div>
+      </Card>
+
+
+      <Card className="p-6 sm:p-7 lg:col-span-2">
+        <h3 className="mb-4 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
+          <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-cyan-600 to-blue-600">
+            <Globe size={15} />
+          </span>
+          Network
+        </h3>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 flex-1 text-xs leading-relaxed text-zinc-500">
+            L1 network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. The same recovery phrase is used on
+            both; balances, activity, burns and sub-addresses are kept separately per network.
+          </p>
+          <NetworkSwitch />
+        </div>
+        {store.network && nodesForNetwork(store.network).length > 0 && (
+          <div className="mt-4 border-t border-[var(--tari-border)] pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-[var(--tari-text)]">Node</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
+                  Which base node this wallet queries for scanning and broadcasts. Auto picks the
+                  fastest node that is fully synced; or pin a specific one.
+                </p>
+              </div>
+              <select
+                value={store.selectedNode}
+                onChange={(e) => store.setSelectedNode(e.target.value)}
+                aria-label="Query node"
+                className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
+              >
+                <option value={AUTO_NODE_ID}>Auto (fastest)</option>
+                {nodesForNetwork(store.network).map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-2.5 flex items-center gap-2 text-[11px]">
+              <NodeStatusDot status={store.nodeStatus} />
+              <span className="min-w-0 text-zinc-500">
+                {store.nodeStatus === "checking"
+                  ? "Checking nodes…"
+                  : store.nodeStatus === "offline"
+                    ? "Not connected — no node responded"
+                    : (() => {
+                        const node = store.activeNodeId ? nodeById(store.network!, store.activeNodeId) : null;
+                        const name = node ? node.label : "node";
+                        const auto = store.selectedNode === AUTO_NODE_ID ? "Auto → " : "";
+                        const ms = store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : "";
+                        return `Connected: ${auto}${name}${ms}`;
+                      })()}
+              </span>
+              <button
+                type="button"
+                onClick={() => store.refreshNodeStatus()}
+                className="ml-auto shrink-0 rounded-md px-2 py-0.5 text-[11px] whitespace-nowrap text-zinc-500 underline decoration-dotted hover:text-[var(--tari-text)]"
+              >
+                Re-test
+              </button>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Card className="h-fit p-6 sm:p-7 lg:col-span-2">
         <h3 className="mb-1.5 flex items-center gap-2.5 text-lg font-bold text-[var(--tari-text)]">
@@ -468,14 +540,7 @@ function SettingsContent() {
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-4">
-          <Field
-            label={`Scan from${tip ? ` — tip ${tip.toLocaleString()}` : ""}`}
-            hint={
-              store.birthdayHeight
-                ? `Earliest: birthday block ${store.birthdayHeight.toLocaleString()} — scans never start below it.`
-                : undefined
-            }
-          >
+          <Field label="From block">
             <TextInput
               value={scanFrom}
               onChange={(e) => setScanFrom(e.target.value.replace(/\D/g, ""))}
@@ -483,7 +548,7 @@ function SettingsContent() {
               mono
             />
           </Field>
-          <Field label="Scan to">
+          <Field label="To block">
             <TextInput
               value={scanTo}
               onChange={(e) => setScanTo(e.target.value.replace(/\D/g, ""))}
@@ -492,6 +557,15 @@ function SettingsContent() {
             />
           </Field>
         </div>
+        {(tip || store.birthdayHeight) && (
+          <p className="mt-2 mb-4 text-[11px] leading-relaxed text-zinc-500">
+            {tip ? `Chain tip ${tip.toLocaleString()}.` : ""}
+            {tip && store.birthdayHeight ? " " : ""}
+            {store.birthdayHeight
+              ? `Scans never start below this wallet's birthday block, ${store.birthdayHeight.toLocaleString()}.`
+              : ""}
+          </p>
+        )}
 
         <Field
           label={`Threads — scan speed (${detectedCores()} cores detected)`}
@@ -510,8 +584,9 @@ function SettingsContent() {
             // cores just oversubscribes the CPU: the scan gets slower, not faster.
             options={threadOptions().map((n) => ({
               value: String(n),
-              label: n === maxWorkers() ? `${n} · max` : String(n),
+              label: n === maxWorkers() ? "Max" : String(n),
             }))}
+            fill
           />
         </Field>
 
@@ -690,62 +765,6 @@ function SettingsContent() {
             <Trash2 size={15} /> Erase wallet
           </Button>
         </div>
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--tari-border)] pt-4">
-          <p className="text-[11px] text-zinc-600">
-            L1 network: <b className="text-zinc-400">{networkLabel(store.network)}</b>. The same recovery phrase is used on
-            both; balances, activity, burns and sub-addresses are kept separately per network.
-          </p>
-          <NetworkSwitch />
-        </div>
-        {store.network && nodesForNetwork(store.network).length > 0 && (
-          <div className="mt-4 border-t border-[var(--tari-border)] pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[13px] font-semibold text-[var(--tari-text)]">Node</p>
-                <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-600">
-                  Which base node this wallet queries for scanning and broadcasts. Auto picks the
-                  fastest node that is fully synced; or pin a specific one.
-                </p>
-              </div>
-              <select
-                value={store.selectedNode}
-                onChange={(e) => store.setSelectedNode(e.target.value)}
-                aria-label="Query node"
-                className="shrink-0 rounded-lg border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-3 py-1.5 text-[13px] text-[var(--tari-text)] outline-none focus:border-zinc-500"
-              >
-                <option value={AUTO_NODE_ID}>Auto (fastest)</option>
-                {nodesForNetwork(store.network).map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mt-2.5 flex items-center gap-2 text-[11px]">
-              <NodeStatusDot status={store.nodeStatus} />
-              <span className="text-zinc-500">
-                {store.nodeStatus === "checking"
-                  ? "Checking nodes…"
-                  : store.nodeStatus === "offline"
-                    ? "Not connected — no node responded"
-                    : (() => {
-                        const node = store.activeNodeId ? nodeById(store.network!, store.activeNodeId) : null;
-                        const name = node ? node.label : "node";
-                        const auto = store.selectedNode === AUTO_NODE_ID ? "Auto → " : "";
-                        const ms = store.activeNodeLatencyMs != null ? ` · ${store.activeNodeLatencyMs} ms` : "";
-                        return `Connected: ${auto}${name}${ms}`;
-                      })()}
-              </span>
-              <button
-                type="button"
-                onClick={() => store.refreshNodeStatus()}
-                className="ml-auto rounded-md px-2 py-0.5 text-[11px] text-zinc-500 underline decoration-dotted hover:text-[var(--tari-text)]"
-              >
-                Re-test
-              </button>
-            </div>
-          </div>
-        )}
       </Card>
 
       {/* CPAL-1.0 Exhibit B attribution: deployments of this code keep this notice visible. */}
