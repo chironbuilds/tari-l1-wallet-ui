@@ -6,7 +6,8 @@
 // controls both, and neither side needs the other's keys.
 
 import { decipherSeed } from "tari-cipherseed";
-import { OOTLE_NETWORK, OotleAccount, type TokenBalance } from "../ootle";
+import { defaultIndexerUrl } from "@tari-project/ootle";
+import { OOTLE_NETWORK, OotleAccount, toOotleNetwork, type TokenBalance } from "../ootle";
 import { hexToBytes } from "./cipherseed";
 
 /** Account index on the L2 side. The extension wallet supports several; this UI shows the first. */
@@ -55,4 +56,21 @@ export async function fetchL2Balances(account: OotleAccount): Promise<L2Balances
   } catch (e) {
     return { balances: [], error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/**
+ * Whether an L1 burn has been claimed on Ootle, by any wallet: the engine writes a
+ * `tombstone_<commitment>` substate for every claimed burn (holding its value) and refuses a second
+ * claim of the same commitment. Returns the claimed value, or null while it is unclaimed. Throws
+ * when the indexer can't answer, so a network error is never read as "unclaimed".
+ */
+export async function burnClaimedOnOotle(commitmentHex: string): Promise<bigint | null> {
+  const base = defaultIndexerUrl(toOotleNetwork(OOTLE_NETWORK));
+  const res = await fetch(`${base}/substates/tombstone_${commitmentHex.toLowerCase()}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`indexer ${res.status}`);
+  const body = (await res.json()) as { substate?: { ClaimedOutputTombstone?: { value?: number | string } } };
+  const value = body.substate?.ClaimedOutputTombstone?.value;
+  if (value === undefined) throw new Error("unexpected tombstone substate");
+  return BigInt(value);
 }

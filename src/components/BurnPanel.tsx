@@ -408,7 +408,9 @@ function statusText(rec: BurnRecord, claimable: boolean): string {
     case "claiming":
       return "Claiming on Ootle…";
     case "claimed":
-      return `Claimed ${formatMicro(BigInt(rec.claimedMicro ?? "0"))} tTARI`;
+      return rec.claimedElsewhere
+        ? `Claimed on Ootle by another wallet · ${formatMicro(BigInt(rec.claimedMicro ?? rec.amountMicro))} tTARI`
+        : `Claimed ${formatMicro(BigInt(rec.claimedMicro ?? "0"))} tTARI`;
     case "external":
       return rec.outputProof ? "Mined — proof ready to export" : "Waiting to be mined";
     case "failed":

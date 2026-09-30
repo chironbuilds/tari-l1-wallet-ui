@@ -66,6 +66,8 @@ export interface BurnRecord {
   minedHeight?: number;
   claimTxId?: string;
   claimedMicro?: string;
+  /** Claimed on Ootle by some other wallet or tool (seen from the chain, not claimed from here). */
+  claimedElsewhere?: boolean;
   /** The last reason a claim did not go through; cleared on the next attempt. */
   lastError?: string;
   lastAttemptAt?: number;

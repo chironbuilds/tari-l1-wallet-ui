@@ -24,7 +24,7 @@ import {
 } from "./lib/scanner";
 import { createDetectPool, type DetectPool } from "./lib/detect-pool";
 import { fetchChainTip } from "./lib/explorer";
-import { deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
+import { burnClaimedOnOotle, deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
@@ -1037,6 +1037,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return Array.from(key, (b) => b.toString(16).padStart(2, "0")).join("");
   }, [backupHex]);
 
+  /** A burn the chain shows as claimed that this wallet didn't claim itself. */
+  const markClaimedElsewhere = useCallback((id: string, valueMicro?: bigint) => {
+    setBurns((b) =>
+      b.map((r) =>
+        r.id === id && r.status !== "claimed"
+          ? {
+              ...r,
+              status: "claimed",
+              claimedElsewhere: true,
+              claimedMicro: valueMicro !== undefined ? valueMicro.toString() : r.amountMicro,
+              lastError: undefined,
+            }
+          : r,
+      ),
+    );
+  }, []);
+
   const claimBurn = useCallback(
     async (id: string, manual: boolean) => {
       const rec = burnsRef.current.find((r) => r.id === id);
@@ -1060,6 +1077,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         refreshL2Ref.current();
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
+        // Claimed already -- by another wallet holding the proof, or an earlier attempt that did land.
+        if (/already claimed/i.test(message)) {
+          markClaimedElsewhere(id);
+          return;
+        }
         // The burn stays claimable whatever went wrong, so it returns to waiting either way.
         setBurns((b) => b.map((r) => (r.id === id ? { ...r, status: "mined", lastError: message } : r)));
         if (manual) throw isRetryableClaimError(message) ? new Error(`Not claimable yet: ${message}`) : e;
@@ -1067,7 +1089,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         claimingRef.current.delete(id);
       }
     },
-    [backupHex],
+    [backupHex, markClaimedElsewhere],
   );
 
   const claimBurnNow = useCallback((id: string) => claimBurn(id, true), [claimBurn]);
@@ -1079,6 +1101,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    */
   const advanceBurns = useCallback(async () => {
     for (const rec of burnsRef.current) {
+      // A burn this wallet hasn't seen claimed may have been claimed elsewhere (the proof exported
+      // to another wallet, or the same seed in another browser). The chain is the authority.
+      if (
+        burnClaimableNow(network) &&
+        rec.outputProof &&
+        (rec.status === "mined" ||
+          rec.status === "external" ||
+          // "Claiming" left behind by a page closed mid-claim: nothing in flight here any more.
+          (rec.status === "claiming" && !claimingRef.current.has(rec.id)))
+      ) {
+        try {
+          const claimed = await burnClaimedOnOotle(rec.parts.commitmentHex);
+          if (claimed !== null) {
+            markClaimedElsewhere(rec.id, claimed);
+            continue;
+          }
+          if (rec.status === "claiming") {
+            setBurns((b) => b.map((r) => (r.id === rec.id && r.status === "claiming" ? { ...r, status: "mined" } : r)));
+            continue;
+          }
+        } catch {
+          /* indexer unreachable: decide nothing this pass */
+        }
+      }
       // A burn mined before Ootle 0.42 has only a kernel proof, which claims no longer use; it
       // fetches its output proof like a new one.
       const needsProof =
@@ -1115,13 +1161,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         void claimBurn(rec.id, false);
       }
     }
-  }, [claimBurn, network]);
+  }, [claimBurn, markClaimedElsewhere, network]);
 
   const burnsInFlight = burns.some(
     (r) =>
       r.status === "broadcast" ||
       (r.status === "mined" && r.toOwnAccount && burnClaimableNow(network)) ||
-      ((r.status === "external" || r.status === "mined") && !r.outputProof),
+      ((r.status === "external" || r.status === "mined") && !r.outputProof) ||
+      // Burns out for someone else to claim: watch for the claim landing.
+      (r.status === "external" && burnClaimableNow(network)) ||
+      (r.status === "claiming" && burnClaimableNow(network)),
   );
   useEffect(() => {
     if (!ready || !wallet || walletLocked || !burnsInFlight) return;
