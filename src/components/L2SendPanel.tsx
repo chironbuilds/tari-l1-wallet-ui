@@ -40,12 +40,12 @@ const MODES: { id: Mode; label: string; blurb: string }[] = [
  * reason about. A transfer names a resource, an amount and (for a send) a recipient; the account
  * pays a flat max fee out of its own vault.
  */
-export function L2SendPanel() {
+export function L2SendPanel({ initialMode = "send" }: { initialMode?: Mode } = {}) {
   const store = useStore();
   const toast = useToast();
   const { identity, balances } = store.l2;
 
-  const [mode, setMode] = useState<Mode>("send");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const usable = useMemo(
     // NonFungible excluded: this panel sends a decimal *amount* of a resource, but an NFT's
     // `amount` is a token count (see TokenBalance.nonFungibleTokenIds's doc comment) -- sending a
@@ -231,7 +231,7 @@ export function L2SendPanel() {
           <Wallet size={28} className="text-zinc-500" />
           <p className="text-sm font-bold text-[var(--tari-text)]">No funds available</p>
           <p className="max-w-[42ch] text-xs text-zinc-500">
-            This account holds no Ootle funds. Claim some test TARI from the Ootle card first.
+            This account holds no Ootle funds yet. Burn tXTM from layer 1 to get some.
           </p>
         </div>
       ) : (

@@ -49,6 +49,8 @@ type Panel =
   | "tools"
   | "settings"
   | "l2send"
+  | "l2shield"
+  | "l2unshield"
   | "l2receive"
   | "subaddresses"
   | "dapps"
@@ -469,6 +471,8 @@ export function Dashboard() {
                 {panel === "tools" && <ToolsPanel />}
                 {panel === "settings" && <SettingsPanel />}
                 {panel === "l2send" && <L2SendPanel />}
+                {panel === "l2shield" && <L2SendPanel initialMode="shield" />}
+                {panel === "l2unshield" && <L2SendPanel initialMode="unshield" />}
                 {panel === "l2receive" && <L2ReceivePanel />}
                 {panel === "subaddresses" && <SubAddressPanel />}
                 {panel === "dapps" && <DappStore />}

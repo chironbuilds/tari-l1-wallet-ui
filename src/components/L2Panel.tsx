@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, Droplets, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, EyeOff, Eye, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
@@ -19,11 +19,10 @@ export function L2Panel({
   onOpenPanel,
 }: {
   /** Opens one of the Dashboard's floating panels — the same host the L1 send/receive use. */
-  onOpenPanel: (panel: "l2send" | "l2receive" | "dapps" | "claimburn") => void;
+  onOpenPanel: (panel: "l2send" | "l2shield" | "l2unshield" | "l2receive" | "dapps" | "claimburn") => void;
 }) {
   const store = useStore();
   const toast = useToast();
-  const [claiming, setClaiming] = useState(false);
   const [scanning, setScanning] = useState(false);
   const { identity, balances, loading, error } = store.l2;
 
@@ -47,23 +46,6 @@ export function L2Panel({
     } finally {
       setScanning(false);
     }
-  }
-
-  async function claim() {
-    if (!identity || claiming) return;
-    setClaiming(true);
-    try {
-      await identity.account.claimTestnetXtr();
-      toast({ tone: "success", title: "Test TARI claimed", message: "Refreshing your balances…" });
-      store.refreshL2();
-    } catch (e) {
-      toast({
-        tone: "error",
-        title: "Claim failed",
-        message: e instanceof Error ? e.message.slice(0, 160) : String(e),
-      });
-    }
-    setClaiming(false);
   }
 
   return (
@@ -139,17 +121,30 @@ export function L2Panel({
           <span className="text-[10px] opacity-70">shielded</span>
         </button>
 
-        <button
-          onClick={() => void claim()}
-          disabled={claiming || !identity}
-          className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
-        >
-          <span className="flex items-center gap-2 text-xs font-bold">
-            {claiming ? <Loader2 size={14} className="animate-spin" /> : <Droplets size={14} />}
-            {claiming ? "Claiming…" : "Claim test TARI"}
-          </span>
-          <span className="text-[10px] opacity-70">faucet</span>
-        </button>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          <button
+            onClick={() => onOpenPanel("l2shield")}
+            disabled={!identity}
+            title="Move public funds into a private output"
+            className="flex items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+          >
+            <span className="flex items-center gap-2 text-xs font-bold">
+              <EyeOff size={14} /> Shield
+            </span>
+            <span className="text-[10px] opacity-70">to private</span>
+          </button>
+          <button
+            onClick={() => onOpenPanel("l2unshield")}
+            disabled={!identity}
+            title="Bring private funds back into your public balance"
+            className="flex items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+          >
+            <span className="flex items-center gap-2 text-xs font-bold">
+              <Eye size={14} /> Unshield
+            </span>
+            <span className="text-[10px] opacity-70">to public</span>
+          </button>
+        </div>
 
         <button
           onClick={() => onOpenPanel("claimburn")}
@@ -199,7 +194,7 @@ export function L2Panel({
         <EmptyState
           icon={<Wallet size={20} />}
           title="No balances"
-          sub="This account holds no Ootle funds yet. Claim test TARI from the faucet, or burn tXTM from layer 1."
+          sub="This account holds no Ootle funds yet. Burn tXTM from layer 1 to get some."
         />
       ) : (
         <div className="space-y-2.5">
