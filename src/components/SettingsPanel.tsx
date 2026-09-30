@@ -564,16 +564,25 @@ function SettingsContent() {
           </div>
         )}
 
-        <div className="mt-4 flex gap-2.5">
+        <div className="mt-4 flex flex-wrap gap-2.5">
           {!store.scan || store.scan.done ? (
-            <Button
-              disabled={!scanFrom || !scanTo}
-              onClick={() =>
-                store.startScan(Math.max(Number(scanFrom), store.birthdayHeight ?? 1), Number(scanTo))
-              }
-            >
-              <Radar size={15} /> Start scan
-            </Button>
+            <>
+              <Button
+                disabled={!scanFrom || !scanTo}
+                onClick={() =>
+                  store.startScan(Math.max(Number(scanFrom), store.birthdayHeight ?? 1), Number(scanTo))
+                }
+              >
+                <Radar size={15} /> Start scan
+              </Button>
+              <Button
+                variant="outline"
+                title="Re-import your full balance from the wallet's birthday block — use this if coins went missing after a rejected send."
+                onClick={() => store.rescanFromBirthday()}
+              >
+                Rescan from birthday
+              </Button>
+            </>
           ) : (
             <Button variant="danger" onClick={store.stopScan}>
               Stop scan

@@ -6,6 +6,7 @@ import {
 } from "@chironbuilder/tari-l1-wasm";
 import {
   broadcastBaseUrl,
+  coinSymbol,
   estimateMaxSpend,
   parseAddress,
   selectInputs,
@@ -36,6 +37,7 @@ interface BuildResult {
 export function SendPanel() {
   const store = useStore();
   const toast = useToast();
+  const symbol = coinSymbol(store.network);
 
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
@@ -210,11 +212,11 @@ export function SendPanel() {
           </Row>
           <Row label="Amount">
             <span className="tabular text-base font-bold text-[var(--tari-text)]">
-              {formatMicro(amountMicro ?? 0n)} XTM
+              {formatMicro(amountMicro ?? 0n)} {symbol}
             </span>
           </Row>
           <Row label="Est. fee">
-            <span className="tabular">{selection ? formatMicro(selection.feeMicro) : "—"} XTM</span>
+            <span className="tabular">{selection ? formatMicro(selection.feeMicro) : "—"} {symbol}</span>
           </Row>
           <Row label="Fee rate">{fpg?.toString()} µT/g</Row>
           <Row label="Sender">
@@ -241,7 +243,7 @@ export function SendPanel() {
         <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-[#06C983] to-[#168552]">
           <Send size={15} />
         </span>
-        Send XTM
+        Send {symbol}
       </h2>
 
       <div className="space-y-4">
@@ -275,8 +277,8 @@ export function SendPanel() {
 
         <Field
           label="Amount"
-          hint={`Max available: ${formatMicro(maxSpend)} XTM${
-            selection && amountMicro ? ` · est. fee ${formatMicro(selection.feeMicro)} XTM` : ""
+          hint={`Max available: ${formatMicro(maxSpend)} ${symbol}${
+            selection && amountMicro ? ` · est. fee ${formatMicro(selection.feeMicro)} ${symbol}` : ""
           }`}
         >
           <div className="relative">
@@ -373,10 +375,10 @@ export function SendPanel() {
           <p className="text-center text-xs text-[var(--st-red)]">
             Insufficient spendable balance
             {store.lockedMicro > 0n
-              ? ` — ${formatMicro(store.lockedMicro)} XTM is still locked`
+              ? ` — ${formatMicro(store.lockedMicro)} ${symbol} is still locked`
               : ""}
             {store.pendingMicro > 0n
-              ? ` — ${formatMicro(store.pendingMicro)} XTM is awaiting confirmation`
+              ? ` — ${formatMicro(store.pendingMicro)} ${symbol} is awaiting confirmation`
               : ""}
           </p>
         )}
@@ -398,12 +400,12 @@ export function SendPanel() {
           </p>
           <dl className="mt-3 space-y-2 rounded-xl bg-[var(--tari-bg-input)] p-4 text-sm">
             <Row label="Fee">
-              <span className="tabular">{formatMicro(result.signed.feeMicro)} XTM</span>
+              <span className="tabular">{formatMicro(result.signed.feeMicro)} {symbol}</span>
             </Row>
             <Row label="Change back">
               <span className="tabular">
                 {result.signed.changeValueMicro !== undefined
-                  ? `${formatMicro(result.signed.changeValueMicro)} XTM`
+                  ? `${formatMicro(result.signed.changeValueMicro)} ${symbol}`
                   : "—"}
               </span>
             </Row>
