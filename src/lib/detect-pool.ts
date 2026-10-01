@@ -79,7 +79,15 @@ export async function createDetectPool(
       worker.postMessage({ type: "init", id, backupHex, network });
     });
 
-  const slots = await Promise.all(Array.from({ length: size }, spawn));
+  // All or nothing: if one worker fails to start, the ones that did are terminated rather than
+  // left holding their wasm instances with no pool to own them.
+  const started = await Promise.allSettled(Array.from({ length: size }, spawn));
+  const failed = started.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (failed) {
+    for (const r of started) if (r.status === "fulfilled") r.value.worker.terminate();
+    throw failed.reason;
+  }
+  const slots = started.map((r) => (r as PromiseFulfilledResult<Slot>).value);
   const waiting: ((s: Slot) => void)[] = [];
 
   const acquire = (): Promise<Slot> => {

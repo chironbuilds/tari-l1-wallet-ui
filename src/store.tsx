@@ -23,6 +23,9 @@ import {
   type ScanProgress,
 } from "./lib/scanner";
 import { createDetectPool, type DetectPool } from "./lib/detect-pool";
+
+/** Smallest scan worth starting detection workers for (see startScan). */
+const POOL_MIN_BLOCKS = 50;
 import { fetchChainTip } from "./lib/explorer";
 import { burnClaimedOnOotle, deriveL2Identity, fetchL2Balances, fetchL2Deposits, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
@@ -1484,11 +1487,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // workers rather than on the thread that paints. Each costs a wasm instance, which is why
       // the pool lives for one scan and is torn down at the end rather than kept warm.
       const poolRef: { current: DetectPool | null } = { current: null };
-      if (backupHex) {
+      // Set once the scan has ended, so a pool that only comes up afterwards is torn down instead
+      // of left running: each worker holds a wasm instance, and the catch-up scans that follow the
+      // tip (one or two blocks, every new block) used to finish before their pool started, leaking
+      // a pool per block until the tab ran out of memory for new wasm instances.
+      let scanEnded = false;
+      // A few blocks scan quickly on the main thread; workers only pay off on a real backlog.
+      if (backupHex && to - from + 1 >= POOL_MIN_BLOCKS) {
         // Deliberately not awaited: the scan starts now on the main thread and switches to the
         // workers the moment they are up. A pool that never starts costs some speed, never the scan.
         void createDetectPool(backupHex, network ?? "mainnet", scanThreads)
-          .then((p) => { poolRef.current = p; })
+          .then((p) => {
+            if (scanEnded) p.dispose();
+            else poolRef.current = p;
+          })
           .catch(() => { poolRef.current = null; });
       }
       void scanRange(
@@ -1561,6 +1573,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           error: e instanceof Error ? e.message : String(e),
         }))
         .then((final) => {
+        scanEnded = true;
         poolRef.current?.dispose();
         poolRef.current = null;
         setScan(final);
