@@ -22,6 +22,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { isLocked, useStore } from "../store";
 import { useI18n } from "../i18n";
+import { collapseClass, useCollapseOnScroll } from "../lib/useCollapseOnScroll";
 import { formatMicro, timeAgo, truncMiddle } from "../lib/format";
 import { ActionTiles, Button, Card, CopyButton, Logo, NodeStatusDot } from "./ui";
 import { TowerBackground } from "./TowerBackground";
@@ -82,6 +83,7 @@ const THEME_KEY = "tari-l1-wallet/theme";
 export function Dashboard() {
   const store = useStore();
   const { t } = useI18n();
+  const l1Rows = useCollapseOnScroll();
   const [panel, setPanel] = useState<Panel>(null);
   const [dark, setDark] = useState(() => {
     try {
@@ -324,6 +326,9 @@ export function Dashboard() {
                   {t("dash.locked", { amount: formatMicro(store.lockedMicro), symbol })}
                 </p>
               )}
+              {/* Folds away while the activity list is scrolled down, back on scrolling up. */}
+              <div className={collapseClass(l1Rows.open)} aria-hidden={!l1Rows.open} inert={!l1Rows.open}>
+              <div className="min-h-0 overflow-hidden">
               <button
                 onClick={() => store.requestLayer("L2")}
                 className="mt-3 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35"
@@ -347,6 +352,8 @@ export function Dashboard() {
                   <span className="text-[10px] opacity-70">{t("dash.noPinSet")}</span>
                 </button>
               )}
+              </div>
+              </div>
             </div>
 
             <ActionTiles
@@ -372,8 +379,9 @@ export function Dashboard() {
 
             {/* Transaction list */}
             <div
-              className="flex min-h-[180px] flex-1 flex-col gap-2 rounded-2xl p-2"
+              className="flex min-h-[96px] flex-1 flex-col gap-2 overflow-y-auto overscroll-contain rounded-2xl p-2"
               style={{ background: "var(--tari-bg-input)" }}
+              onScroll={(e) => l1Rows.onScroll(e.currentTarget)}
             >
               {recent.length === 0 ? (
                 <div className="grid place-items-center py-6">
@@ -382,7 +390,7 @@ export function Dashboard() {
                   </span>
                 </div>
               ) : (
-                recent.slice(0, 6).map((tx) => {
+                recent.map((tx) => {
                   const incoming = tx.direction === "in";
                   return (
                   <button

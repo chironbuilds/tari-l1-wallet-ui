@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { collapseClass, useCollapseOnScroll } from "../lib/useCollapseOnScroll";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, EyeOff, Eye, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
@@ -33,45 +34,8 @@ export function L2Panel({
   const { identity, balances, loading, error } = store.l2;
   const activity = useL2History(identity?.address);
   const [tab, setTab] = useState<L2Tab>("balances");
-  const [actionsOpen, setActionsOpen] = useState(true);
-  const scrollState = useRef({ last: 0, lockUntil: 0, upTravel: 0 });
-
-  /**
-   * Collapse the card's action rows when the list is scrolled down, and bring them back when it is
-   * scrolled up. Hysteresis keeps it from flickering: collapse only past 24px going down, expand
-   * after 40px of upward travel or at the top, and ignore scroll events for the length of the
-   * animation, since the reflow itself moves scrollTop.
-   */
-  function onListScroll(el: HTMLDivElement) {
-    const now = performance.now();
-    const st = el.scrollTop;
-    const state = scrollState.current;
-    const dy = st - state.last;
-    state.last = st;
-    if (now < state.lockUntil) return;
-    if (st <= 4) {
-      state.upTravel = 0;
-      if (!actionsOpen) {
-        setActionsOpen(true);
-        state.lockUntil = now + 350;
-      }
-      return;
-    }
-    if (dy > 0) {
-      state.upTravel = 0;
-      if (actionsOpen && st > 24) {
-        setActionsOpen(false);
-        state.lockUntil = now + 350;
-      }
-    } else if (dy < 0) {
-      state.upTravel -= dy;
-      if (!actionsOpen && state.upTravel > 40) {
-        setActionsOpen(true);
-        state.upTravel = 0;
-        state.lockUntil = now + 350;
-      }
-    }
-  }
+  const collapse = useCollapseOnScroll();
+  const actionsOpen = collapse.open;
 
   const headline = pickHeadline(balances);
 
@@ -161,7 +125,7 @@ export function L2Panel({
 
         {/* Folds away while the list below is scrolled down, back on scrolling up: the list gets the room. */}
         <div
-          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${actionsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+          className={collapseClass(actionsOpen)}
           aria-hidden={!actionsOpen}
           inert={!actionsOpen}
         >
@@ -224,8 +188,7 @@ export function L2Panel({
           value={tab}
           onChange={(v) => {
             setTab(v as L2Tab);
-            setActionsOpen(true);
-            scrollState.current.last = 0;
+            collapse.reset();
           }}
           options={[
             { value: "balances", label: t("l2tabs.balances") },
@@ -257,7 +220,7 @@ export function L2Panel({
       <div
         key={tab}
         className="min-h-[96px] flex-1 overflow-y-auto overscroll-contain pr-0.5"
-        onScroll={(e) => onListScroll(e.currentTarget)}
+        onScroll={(e) => collapse.onScroll(e.currentTarget)}
       >
         {tab === "activity" ? (
           activity.length === 0 ? (
