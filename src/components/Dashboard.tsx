@@ -250,7 +250,7 @@ export function Dashboard() {
 
         {/* ── Left panel — wallet column (v1.6 replica) ── */}
         <aside
-          className="pointer-events-auto relative z-20 order-1 flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[20px] md:order-2 md:mb-4 md:h-[78vh] md:max-h-[calc(100vh-20px)] md:w-[320px] md:flex-none md:self-end"
+          className="pointer-events-auto relative z-20 order-1 flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-[20px] md:order-2 md:mb-4 md:h-[68vh] md:max-h-[calc(100vh-20px)] md:w-[320px] md:flex-none md:self-end"
           style={{
             background: "var(--tari-bg-deep)",
             border: "1px solid var(--tari-border)",

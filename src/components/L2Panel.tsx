@@ -202,7 +202,7 @@ export function L2Panel({
       </div>
 
       {/* Each tab scrolls on its own, so a long list never pushes the other out of reach. */}
-      <div className="min-h-[120px] flex-1 overflow-y-auto overscroll-contain pr-0.5">
+      <div className="min-h-[96px] flex-1 overflow-y-auto overscroll-contain pr-0.5">
         {tab === "activity" ? (
           activity.length === 0 ? (
             <p className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-xs text-zinc-500">
