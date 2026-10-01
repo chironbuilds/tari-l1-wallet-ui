@@ -15,6 +15,7 @@ const TITLE: Record<L2Activity["kind"], TranslationKey> = {
   claimBurn: "l2hist.kindClaimBurn",
   dapp: "l2hist.kindDapp",
   received: "l2hist.kindReceived",
+  receivedPrivately: "l2hist.kindReceivedPrivately",
 };
 
 function KindIcon({ kind }: { kind: L2Activity["kind"] }) {
@@ -26,8 +27,9 @@ function KindIcon({ kind }: { kind: L2Activity["kind"] }) {
     claimBurn: <Flame size={14} />,
     dapp: <Grid3x3 size={14} />,
     received: <ArrowDownLeft size={15} />,
+    receivedPrivately: <ArrowDownLeft size={15} />,
   };
-  const incoming = kind === "claimBurn" || kind === "received";
+  const incoming = kind === "claimBurn" || kind === "received" || kind === "receivedPrivately";
   return (
     <span
       className={
@@ -48,11 +50,13 @@ export function L2ActivityRow({ e, compact = false }: { e: L2Activity; compact?:
     e.amount !== undefined && e.divisibility !== undefined
       ? `${formatResourceAmount(BigInt(e.amount), e.divisibility)} ${e.symbol ?? ""}`.trim()
       : null;
-  const sign = e.kind === "claimBurn" || e.kind === "received" ? "+" : e.kind === "send" || e.kind === "sendPrivately" ? "−" : "";
+  const sign = e.kind === "claimBurn" || e.kind === "received" || e.kind === "receivedPrivately" ? "+" : e.kind === "send" || e.kind === "sendPrivately" ? "−" : "";
   const sub = [
-    timeAgo(e.createdAt),
+    e.undated ? t("l2hist.earlier") : timeAgo(e.createdAt),
     e.counterparty ? (e.kind === "dapp" ? e.counterparty : t("l2hist.to", { who: truncMiddle(e.counterparty, 8, 6) })) : null,
+    // Older wallets logged one "received" entry per scan, with the count as its note.
     e.kind === "received" && e.note ? t("l2hist.outputs", { n: e.note }) : null,
+    e.kind === "receivedPrivately" && e.note ? `“${e.note}”` : null,
   ]
     .filter(Boolean)
     .join(" · ");

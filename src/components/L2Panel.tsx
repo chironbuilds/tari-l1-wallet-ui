@@ -10,7 +10,7 @@ import { useI18n } from "../i18n";
 import { ActionTiles, Button, CopyButton, EmptyState, Segmented } from "./ui";
 
 type L2Tab = "balances" | "activity";
-import { logL2, useL2History } from "../lib/l2history";
+import { useL2History } from "../lib/l2history";
 import { L2ActivityRow } from "./L2ActivityPanel";
 
 /**
@@ -49,7 +49,6 @@ export function L2Panel({
     setScanning(true);
     try {
       const claimed = await store.scanL2PrivateFunds();
-      if (claimed > 0) logL2(identity?.address, { kind: "received", status: "done", note: String(claimed) });
       toast({
         tone: claimed > 0 ? "success" : "info",
         title: claimed > 0 ? t("l2.foundOutputs", { n: claimed }) : t("l2.nothingNew"),

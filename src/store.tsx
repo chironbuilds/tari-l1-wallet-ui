@@ -24,7 +24,7 @@ import {
 } from "./lib/scanner";
 import { createDetectPool, type DetectPool } from "./lib/detect-pool";
 import { fetchChainTip } from "./lib/explorer";
-import { burnClaimedOnOotle, deriveL2Identity, fetchL2Balances, type L2Identity } from "./lib/l2";
+import { burnClaimedOnOotle, deriveL2Identity, fetchL2Balances, fetchL2Deposits, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
 import { wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, type EncryptedBlob } from "./lib/pinLock";
@@ -40,7 +40,8 @@ import {
   setSelectedNodeId,
 } from "./lib/rpc";
 import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
-import { withL2Log } from "./lib/l2history";
+import { hasPendingL2, receiptKnown, receiptsSeeded, recordReceipts, withL2Log } from "./lib/l2history";
+import type { ScannedStealthOutput } from "@chironbuilder/ootle-sdk";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -367,6 +368,27 @@ interface Store {
 }
 
 const StoreCtx = createContext<Store | null>(null);
+
+/** One history entry per private output a scan turned up (keyed by commitment, so never twice). */
+function logPrivateReceipts(identity: L2Identity, found: ScannedStealthOutput[], balances: { resourceAddress: string; divisibility: number; symbol: string | null }[]) {
+  recordReceipts(
+    identity.address,
+    found.map((o) => {
+      const meta = balances.find((b) => b.resourceAddress === o.resourceAddress);
+      return {
+        key: `priv:${o.commitment}`,
+        entry: {
+          kind: "receivedPrivately" as const,
+          amount: o.amount.toString(),
+          divisibility: meta?.divisibility ?? 6,
+          symbol: meta?.symbol ?? undefined,
+          transactionId: o.transactionId,
+          note: o.memo || undefined,
+        },
+      };
+    }),
+  );
+}
 
 export function useStore(): Store {
   const s = useContext(StoreCtx);
@@ -1271,9 +1293,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!account) return 0;
     setL2((prev) => ({ ...prev, loading: true }));
     try {
-      const { claimed } = await account.scanForPrivatePayments();
+      const { claimed, found } = await account.scanForPrivatePayments();
       const { balances, error } = await fetchL2Balances(account);
       setL2((prev) => ({ ...prev, balances, error, loading: false }));
+      logPrivateReceipts(l2.identity!, found, balances);
       return claimed;
     } catch (e) {
       setL2((prev) => ({
@@ -1284,6 +1307,67 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return 0;
     }
   }, [l2.identity]);
+
+  /**
+   * Adds what the account received to its Ootle history: public deposits into its vaults, and
+   * private (stealth) payments found by a short scan of recent transactions. The first pass for an
+   * account backfills what is already on chain as undated entries; later passes date what they find.
+   */
+  const receiptsBusy = useRef(false);
+  const syncL2Receipts = useCallback(async () => {
+    const identity = l2.identity;
+    if (!identity || receiptsBusy.current) return;
+    receiptsBusy.current = true;
+    try {
+      const backfill = !receiptsSeeded(identity.address);
+      let added = 0;
+      let balances = l2.balances;
+      // A send of this wallet's own still in flight has no transaction id yet, so its effect on the
+      // vault can't be told from a receipt; leave the vaults for the next pass.
+      if (!hasPendingL2(identity.address)) {
+        const deposits = await fetchL2Deposits(identity, (key) => receiptKnown(identity.address, key));
+        added += recordReceipts(
+          identity.address,
+          deposits.map((d) => {
+            const meta = balances.find((b) => b.resourceAddress === d.resourceAddress);
+            return {
+              key: d.key,
+              at: d.at,
+              entry: {
+                kind: "received" as const,
+                amount: d.net.toString(),
+                divisibility: meta?.divisibility ?? 6,
+                symbol: meta?.symbol ?? undefined,
+                transactionId: d.transactionId,
+              },
+            };
+          }),
+          backfill,
+        );
+      }
+      const { found } = await identity.account.scanForPrivatePayments(3);
+      if (found.length > 0 || added > 0) {
+        const fresh = await fetchL2Balances(identity.account);
+        balances = fresh.balances;
+        setL2((prev) => ({ ...prev, balances: fresh.balances, error: fresh.error }));
+      }
+      logPrivateReceipts(identity, found, balances);
+    } catch {
+      /* indexer unreachable: try again next pass */
+    } finally {
+      receiptsBusy.current = false;
+    }
+  }, [l2.identity, l2.balances]);
+  const syncL2ReceiptsRef = useRef(syncL2Receipts);
+  syncL2ReceiptsRef.current = syncL2Receipts;
+
+  const l2Address = l2.identity?.address;
+  useEffect(() => {
+    if (layer !== "L2" || !l2Address) return;
+    void syncL2ReceiptsRef.current();
+    const id = setInterval(() => void syncL2ReceiptsRef.current(), 45_000);
+    return () => clearInterval(id);
+  }, [layer, l2Address]);
 
   const setLayer = useCallback(
     (next: Layer) => {
