@@ -40,6 +40,7 @@ import {
   setSelectedNodeId,
 } from "./lib/rpc";
 import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
+import { withL2Log } from "./lib/l2history";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -1066,7 +1067,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       try {
         const identity = await deriveL2Identity(backupHex);
-        const { transactionId, claimedAmount } = await identity.account.claimBurn(proof);
+        const { transactionId, claimedAmount } = await withL2Log(
+          identity.address,
+          { kind: "claimBurn", amount: rec.amountMicro, divisibility: 6, symbol: "tTARI" },
+          () => identity.account.claimBurn(proof),
+        );
         setBurns((b) =>
           b.map((r) =>
             r.id === id

@@ -6,6 +6,7 @@ import { useStore } from "../store";
 import { useToast } from "./toast";
 import { Button, Field } from "./ui";
 import { useI18n } from "../i18n";
+import { withL2Log } from "../lib/l2history";
 
 /**
  * Claims a burn made from another wallet — typically `minotari_console_wallet`, which writes a
@@ -39,7 +40,12 @@ export function ClaimBurnPanel() {
     if (!parsed.proof || !account) return;
     setClaiming(true);
     try {
-      const { claimedAmount } = await account.claimBurn(parsed.proof);
+      const proof = parsed.proof;
+      const { claimedAmount } = await withL2Log(
+        store.l2.identity?.address,
+        { kind: "claimBurn", amount: String(proof.claim_proof.value), divisibility: 6, symbol: "tTARI" },
+        () => account.claimBurn(proof),
+      );
       setClaimed(claimedAmount);
       store.refreshL2();
       toast({ tone: "success", title: t("claimburn.claimedTitle"), message: t("claimburn.claimedMessage", { amount: formatMicro(claimedAmount) }) });

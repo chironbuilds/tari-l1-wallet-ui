@@ -32,6 +32,7 @@ import { ActivityPanel } from "./ActivityPanel";
 import { ToolsPanel } from "./ToolsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { L2Panel } from "./L2Panel";
+import { L2ActivityPanel } from "./L2ActivityPanel";
 import { DappStore } from "./DappStore";
 import { L2SendPanel } from "./L2SendPanel";
 import { L2ReceivePanel } from "./L2ReceivePanel";
@@ -53,6 +54,7 @@ type Panel =
   | "l2shield"
   | "l2unshield"
   | "l2receive"
+  | "l2activity"
   | "subaddresses"
   | "dapps"
   | "burn"
@@ -192,7 +194,7 @@ export function Dashboard() {
             <button
               className="un-rail-btn"
               title={t("dash.allActivity")}
-              onClick={() => openPanel("activity")}
+              onClick={() => openPanel(store.layer === "L2" ? "l2activity" : "activity")}
             >
               <History size={20} />
             </button>
@@ -477,6 +479,7 @@ export function Dashboard() {
                 {panel === "l2shield" && <L2SendPanel initialMode="shield" />}
                 {panel === "l2unshield" && <L2SendPanel initialMode="unshield" />}
                 {panel === "l2receive" && <L2ReceivePanel />}
+                {panel === "l2activity" && <L2ActivityPanel />}
                 {panel === "subaddresses" && <SubAddressPanel />}
                 {panel === "dapps" && <DappStore />}
                 {panel === "burn" && <BurnPanel />}

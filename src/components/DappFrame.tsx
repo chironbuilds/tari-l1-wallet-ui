@@ -38,6 +38,7 @@ import { hostOf } from "../lib/dapps";
 import { OOTLE_NETWORK } from "../ootle";
 import { Badge, Button, Switch } from "./ui";
 import { t } from "../i18n";
+import { withL2Log } from "../lib/l2history";
 
 interface ApprovalState {
   id: string;
@@ -464,7 +465,10 @@ export function DappFrame({
         const claim = claimForSubmit(origin, String(params.requestId ?? ""));
         if (!claim.claimed) return { error: ERROR.internal(claim.reason) };
         try {
-          const result = await executeOperation(account, claim.record.operation);
+          const op = claim.record.operation as { kind?: string };
+          const result = await withL2Log(s.l2.identity?.address, { kind: "dapp", counterparty: origin ?? undefined, note: op.kind }, () =>
+            executeOperation(account, claim.record.operation),
+          );
           settle(claim.record.id, { result });
           storeRef.current.refreshL2();
           return { result };
@@ -503,7 +507,9 @@ export function DappFrame({
         const approved = await askUser(req.id, req.method, params, { summary });
         if (!approved) return { error: ERROR.rejected };
         try {
-          const result = await account.execute(instructions as never[], { maxFee, inputs });
+          const result = await withL2Log(s.l2.identity?.address, { kind: "dapp", counterparty: origin ?? undefined, note: "instructions" }, () =>
+            account.execute(instructions as never[], { maxFee, inputs }),
+          );
           storeRef.current.refreshL2();
           return { result };
         } catch (e) {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, ChevronLeft, EyeOff, Eye, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, EyeOff, Eye, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
@@ -7,6 +7,8 @@ import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
 import { useI18n } from "../i18n";
 import { ActionTiles, Button, CopyButton, EmptyState } from "./ui";
+import { logL2, useL2History } from "../lib/l2history";
+import { L2ActivityRow } from "./L2ActivityPanel";
 
 /**
  * The Ootle (L2) view, laid out to mirror the L1 wallet column: balance card on top, holdings
@@ -20,13 +22,14 @@ export function L2Panel({
   onOpenPanel,
 }: {
   /** Opens one of the Dashboard's floating panels — the same host the L1 send/receive use. */
-  onOpenPanel: (panel: "l2send" | "l2shield" | "l2unshield" | "l2receive" | "dapps" | "claimburn") => void;
+  onOpenPanel: (panel: "l2send" | "l2shield" | "l2unshield" | "l2receive" | "l2activity" | "dapps" | "claimburn") => void;
 }) {
   const store = useStore();
   const toast = useToast();
   const { t } = useI18n();
   const [scanning, setScanning] = useState(false);
   const { identity, balances, loading, error } = store.l2;
+  const activity = useL2History(identity?.address);
 
   const headline = pickHeadline(balances);
 
@@ -40,6 +43,7 @@ export function L2Panel({
     setScanning(true);
     try {
       const claimed = await store.scanL2PrivateFunds();
+      if (claimed > 0) logL2(identity?.address, { kind: "received", status: "done", note: String(claimed) });
       toast({
         tone: claimed > 0 ? "success" : "info",
         title: claimed > 0 ? t("l2.foundOutputs", { n: claimed }) : t("l2.nothingNew"),
@@ -163,6 +167,29 @@ export function L2Panel({
           { label: t("l2.apps"), icon: <Grid3x3 size={16} />, onClick: () => onOpenPanel("dapps"), title: t("dash.ootleApps") },
         ]}
       />
+
+      <div className="flex items-center justify-between px-1 pt-1">
+        <span className="text-sm font-bold text-[var(--tari-text)]">{t("l2hist.recent")}</span>
+        <button
+          onClick={() => onOpenPanel("l2activity")}
+          className="flex items-center gap-0.5 text-xs font-semibold text-zinc-500 hover:text-[var(--tari-text)]"
+        >
+          {t("l2hist.viewAll")} <ChevronRight size={12} />
+        </button>
+      </div>
+      {activity.length === 0 ? (
+        <p className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-xs text-zinc-500">
+          {t("l2hist.emptyTitle")}
+        </p>
+      ) : (
+        <div className="divide-y divide-[var(--tari-border)] overflow-hidden rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)]">
+          {activity.slice(0, 3).map((e) => (
+            <button key={e.id} className="block w-full text-left hover:opacity-90" onClick={() => onOpenPanel("l2activity")}>
+              <L2ActivityRow e={e} compact />
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex items-center justify-between px-1 pt-1">
         <span className="text-sm font-bold text-[var(--tari-text)]">{t("l2.balances")}</span>

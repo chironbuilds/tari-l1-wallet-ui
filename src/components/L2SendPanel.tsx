@@ -7,6 +7,7 @@ import { truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Button, Field, TextInput } from "./ui";
 import { t as translate, useI18n, type TranslationKey } from "../i18n";
+import { withL2Log } from "../lib/l2history";
 
 type Mode = "send" | "sendPrivately" | "shield" | "unshield";
 
@@ -100,23 +101,23 @@ export function L2SendPanel({ initialMode = "send" }: { initialMode?: Mode } = {
     setBusy(true);
     try {
       const trimmedMemo = memo.trim() || undefined;
-      if (mode === "send") {
-        await identity.account.send(recipient.trim(), resource.resourceAddress, amountRaw);
-      } else if (mode === "sendPrivately") {
-        // Note the argument order: sendPrivately takes (resource, recipient), the reverse of
-        // send's (recipient, resource). Both are strings, so nothing but care catches a swap.
-        await identity.account.sendPrivately(
-          resource.resourceAddress,
-          recipient.trim(),
-          amountRaw,
-          undefined,
-          trimmedMemo,
-        );
-      } else if (mode === "shield") {
-        await identity.account.shield(resource.resourceAddress, amountRaw, undefined, trimmedMemo);
-      } else {
-        await identity.account.unshield(resource.resourceAddress, amountRaw, undefined, trimmedMemo);
-      }
+      const entry = {
+        kind: mode,
+        amount: amountRaw.toString(),
+        divisibility: resource.divisibility,
+        symbol: resource.symbol ?? undefined,
+        counterparty: needsRecipient ? recipient.trim() : undefined,
+      };
+      await withL2Log<unknown>(identity.address, entry, () => {
+        if (mode === "send") return identity.account.send(recipient.trim(), resource.resourceAddress, amountRaw);
+        if (mode === "sendPrivately") {
+          // Note the argument order: sendPrivately takes (resource, recipient), the reverse of
+          // send's (recipient, resource). Both are strings, so nothing but care catches a swap.
+          return identity.account.sendPrivately(resource.resourceAddress, recipient.trim(), amountRaw, undefined, trimmedMemo);
+        }
+        if (mode === "shield") return identity.account.shield(resource.resourceAddress, amountRaw, undefined, trimmedMemo);
+        return identity.account.unshield(resource.resourceAddress, amountRaw, undefined, trimmedMemo);
+      });
       toast({
         tone: "success",
         title:
