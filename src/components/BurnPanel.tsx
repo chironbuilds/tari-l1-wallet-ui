@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { parseOotleAddress } from "@tari-project/ootle-wasm";
+import { OOTLE_NETWORK, toOotleNetwork } from "../ootle";
 import { AlertTriangle, ChevronLeft, Download, Flame, Loader2, RefreshCw } from "lucide-react";
 import { WasmBurnBuilder } from "@chironbuilder/tari-l1-wasm";
 import { coinSymbol, networkLabel, estimateMaxSpend, selectInputs, submitViaMiddleware, broadcastBaseUrl } from "../lib/tari";
@@ -62,8 +64,12 @@ export function BurnPanel() {
     return n > 0 && Number.isFinite(n) ? BigInt(Math.floor(n)) : null;
   }, [feePerGram]);
 
-  const claimKey = destination === "own" ? ownKey : otherKey.trim().toLowerCase();
+  // Another account is named by its Ootle address (otl_…): the claim key is the address's owner
+  // public key, which is what the account claims with. A bare 64-hex key is still accepted.
+  const other = useMemo(() => resolveClaimKey(otherKey, store.network ?? ""), [otherKey, store.network]);
+  const claimKey = destination === "own" ? ownKey : other.key;
   const claimKeyValid = !!claimKey && /^[0-9a-f]{64}$/.test(claimKey);
+  const otherError = other.error ? t(other.error) : null;
 
   const spendable = store.utxos.filter((u) => isSpendable(u, store.tipHeight));
   const inputLikes = spendable.map((u) => ({ valueMicro: BigInt(u.valueMicro) }));
@@ -250,16 +256,21 @@ export function BurnPanel() {
           </div>
         ) : (
           <Field
-            label={t("burn.publicKey")}
-            hint={otherKey.trim() && !claimKeyValid ? t("burn.keyInvalid") : t("burn.keyHint")}
+            label={t("burn.otherAddress")}
+            hint={
+              otherError ??
+              (other.key && other.fromAddress
+                ? t("burn.claimKeyFromAddress", { key: truncMiddle(other.key, 10, 8) })
+                : t("burn.addressHint"))
+            }
           >
             <TextInput
               value={otherKey}
               onChange={(e) => setOtherKey(e.target.value)}
-              placeholder={t("burn.keyPlaceholder")}
+              placeholder={t("burn.addressPlaceholder")}
               mono
               spellCheck={false}
-              error={otherKey.trim().length > 0 && !claimKeyValid}
+              error={!!otherError}
             />
           </Field>
         )}
@@ -517,4 +528,29 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <dd className="min-w-0 truncate text-right font-mono text-[var(--tari-text)]">{children}</dd>
     </div>
   );
+}
+
+/**
+ * The claim key for a burn to another Ootle account, from what the user typed: an Ootle address
+ * (`otl_…`), whose owner public key is the account's claim key, or the bare 64-hex key itself. On
+ * testnet the address must be for the Ootle network these burns are claimed on.
+ */
+function resolveClaimKey(
+  input: string,
+  l1Network: string
+): { key: string | null; fromAddress: boolean; error: TranslationKey | null } {
+  const value = input.trim();
+  if (!value) return { key: null, fromAddress: false, error: null };
+  if (/^[0-9a-fA-F]{64}$/.test(value)) return { key: value.toLowerCase(), fromAddress: false, error: null };
+  if (!value.startsWith("otl")) return { key: null, fromAddress: false, error: "burn.addressInvalid" };
+  try {
+    const parsed = parseOotleAddress(value);
+    if (l1Network !== "mainnet" && parsed.network !== toOotleNetwork(OOTLE_NETWORK)) {
+      return { key: null, fromAddress: true, error: "burn.addressWrongNetwork" };
+    }
+    const key = Array.from(parsed.owner_key as Uint8Array, (b) => b.toString(16).padStart(2, "0")).join("");
+    return { key, fromAddress: true, error: null };
+  } catch {
+    return { key: null, fromAddress: true, error: "burn.addressInvalid" };
+  }
 }
