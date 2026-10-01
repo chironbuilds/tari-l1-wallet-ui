@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, EyeOff, Eye, FileInput, Grid3x3, Layers, Loader2, Lock, RefreshCw, Search, TriangleAlert, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
@@ -33,6 +33,45 @@ export function L2Panel({
   const { identity, balances, loading, error } = store.l2;
   const activity = useL2History(identity?.address);
   const [tab, setTab] = useState<L2Tab>("balances");
+  const [actionsOpen, setActionsOpen] = useState(true);
+  const scrollState = useRef({ last: 0, lockUntil: 0, upTravel: 0 });
+
+  /**
+   * Collapse the card's action rows when the list is scrolled down, and bring them back when it is
+   * scrolled up. Hysteresis keeps it from flickering: collapse only past 24px going down, expand
+   * after 40px of upward travel or at the top, and ignore scroll events for the length of the
+   * animation, since the reflow itself moves scrollTop.
+   */
+  function onListScroll(el: HTMLDivElement) {
+    const now = performance.now();
+    const st = el.scrollTop;
+    const state = scrollState.current;
+    const dy = st - state.last;
+    state.last = st;
+    if (now < state.lockUntil) return;
+    if (st <= 4) {
+      state.upTravel = 0;
+      if (!actionsOpen) {
+        setActionsOpen(true);
+        state.lockUntil = now + 350;
+      }
+      return;
+    }
+    if (dy > 0) {
+      state.upTravel = 0;
+      if (actionsOpen && st > 24) {
+        setActionsOpen(false);
+        state.lockUntil = now + 350;
+      }
+    } else if (dy < 0) {
+      state.upTravel -= dy;
+      if (!actionsOpen && state.upTravel > 40) {
+        setActionsOpen(true);
+        state.upTravel = 0;
+        state.lockUntil = now + 350;
+      }
+    }
+  }
 
   const headline = pickHeadline(balances);
 
@@ -120,47 +159,56 @@ export function L2Panel({
           <span className="text-[10px] opacity-70">{networkLabel(store.network)}</span>
         </button>
 
-        <button
-          onClick={() => void findPrivate()}
-          disabled={scanning || !identity}
-          className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+        {/* Folds away while the list below is scrolled down, back on scrolling up: the list gets the room. */}
+        <div
+          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${actionsOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+          aria-hidden={!actionsOpen}
+          inert={!actionsOpen}
         >
-          <span className="flex items-center gap-2 text-xs font-bold">
-            {scanning ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-            {scanning ? t("dash.scanning") : t("l2.findPrivate")}
-          </span>
-          <span className="text-[10px] opacity-70">{t("l2.shieldedTag")}</span>
-        </button>
+          <div className="min-h-0 overflow-hidden">
+            <button
+              onClick={() => void findPrivate()}
+              disabled={scanning || !identity}
+              className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+            >
+              <span className="flex items-center gap-2 text-xs font-bold">
+                {scanning ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                {scanning ? t("dash.scanning") : t("l2.findPrivate")}
+              </span>
+              <span className="text-[10px] opacity-70">{t("l2.shieldedTag")}</span>
+            </button>
 
-        <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-          <button
-            onClick={() => onOpenPanel("l2shield")}
-            disabled={!identity}
-            title={t("l2.shieldTitle")}
-            className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
-          >
-            <EyeOff size={14} className="shrink-0" /> <span className="truncate">{t("l2.shield")}</span>
-          </button>
-          <button
-            onClick={() => onOpenPanel("l2unshield")}
-            disabled={!identity}
-            title={t("l2.unshieldTitle")}
-            className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
-          >
-            <Eye size={14} className="shrink-0" /> <span className="truncate">{t("l2.unshield")}</span>
-          </button>
+            <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+              <button
+                onClick={() => onOpenPanel("l2shield")}
+                disabled={!identity}
+                title={t("l2.shieldTitle")}
+                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
+              >
+                <EyeOff size={14} className="shrink-0" /> <span className="truncate">{t("l2.shield")}</span>
+              </button>
+              <button
+                onClick={() => onOpenPanel("l2unshield")}
+                disabled={!identity}
+                title={t("l2.unshieldTitle")}
+                className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-black/25 px-3 py-2 text-xs font-bold transition-colors hover:bg-black/35 disabled:opacity-60"
+              >
+                <Eye size={14} className="shrink-0" /> <span className="truncate">{t("l2.unshield")}</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => onOpenPanel("claimburn")}
+              disabled={!identity}
+              className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
+            >
+              <span className="flex items-center gap-2 text-xs font-bold">
+                <FileInput size={14} /> {t("l2.claimBurn")}
+              </span>
+              <span className="text-[10px] opacity-70">{t("l2.fromProof")}</span>
+            </button>
+          </div>
         </div>
-
-        <button
-          onClick={() => onOpenPanel("claimburn")}
-          disabled={!identity}
-          className="mt-1.5 flex w-full items-center justify-between rounded-xl bg-black/25 px-3 py-2 text-left transition-colors hover:bg-black/35 disabled:opacity-60"
-        >
-          <span className="flex items-center gap-2 text-xs font-bold">
-            <FileInput size={14} /> {t("l2.claimBurn")}
-          </span>
-          <span className="text-[10px] opacity-70">{t("l2.fromProof")}</span>
-        </button>
       </div>
 
       <ActionTiles
@@ -174,7 +222,11 @@ export function L2Panel({
       <div className="flex items-center justify-between gap-2 px-1 pt-1">
         <Segmented
           value={tab}
-          onChange={(v) => setTab(v as L2Tab)}
+          onChange={(v) => {
+            setTab(v as L2Tab);
+            setActionsOpen(true);
+            scrollState.current.last = 0;
+          }}
           options={[
             { value: "balances", label: t("l2tabs.balances") },
             { value: "activity", label: `${t("l2tabs.activity")}${activity.length ? ` · ${activity.length}` : ""}` },
@@ -202,7 +254,11 @@ export function L2Panel({
       </div>
 
       {/* Each tab scrolls on its own, so a long list never pushes the other out of reach. */}
-      <div className="min-h-[96px] flex-1 overflow-y-auto overscroll-contain pr-0.5">
+      <div
+        key={tab}
+        className="min-h-[96px] flex-1 overflow-y-auto overscroll-contain pr-0.5"
+        onScroll={(e) => onListScroll(e.currentTarget)}
+      >
         {tab === "activity" ? (
           activity.length === 0 ? (
             <p className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-xs text-zinc-500">
