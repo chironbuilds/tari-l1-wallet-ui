@@ -6,7 +6,9 @@ import { truncMiddle } from "../lib/format";
 import { networkLabel } from "../lib/tari";
 import { useToast } from "./toast";
 import { useI18n } from "../i18n";
-import { ActionTiles, Button, CopyButton, EmptyState } from "./ui";
+import { ActionTiles, Button, CopyButton, EmptyState, Segmented } from "./ui";
+
+type L2Tab = "balances" | "activity";
 import { logL2, useL2History } from "../lib/l2history";
 import { L2ActivityRow } from "./L2ActivityPanel";
 
@@ -30,6 +32,7 @@ export function L2Panel({
   const [scanning, setScanning] = useState(false);
   const { identity, balances, loading, error } = store.l2;
   const activity = useL2History(identity?.address);
+  const [tab, setTab] = useState<L2Tab>("balances");
 
   const headline = pickHeadline(balances);
 
@@ -55,7 +58,7 @@ export function L2Panel({
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5">
       {/* Ootle balance card — same shape as the L1 card */}
       <div className="wallet-card p-4">
         <div className="flex items-center justify-between">
@@ -168,103 +171,117 @@ export function L2Panel({
         ]}
       />
 
-      <div className="flex items-center justify-between px-1 pt-1">
-        <span className="text-sm font-bold text-[var(--tari-text)]">{t("l2hist.recent")}</span>
-        <button
-          onClick={() => onOpenPanel("l2activity")}
-          className="flex items-center gap-0.5 text-xs font-semibold text-zinc-500 hover:text-[var(--tari-text)]"
-        >
-          {t("l2hist.viewAll")} <ChevronRight size={12} />
-        </button>
-      </div>
-      {activity.length === 0 ? (
-        <p className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-xs text-zinc-500">
-          {t("l2hist.emptyTitle")}
-        </p>
-      ) : (
-        <div className="divide-y divide-[var(--tari-border)] overflow-hidden rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)]">
-          {activity.slice(0, 3).map((e) => (
-            <button key={e.id} className="block w-full text-left hover:opacity-90" onClick={() => onOpenPanel("l2activity")}>
-              <L2ActivityRow e={e} compact />
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between px-1 pt-1">
-        <span className="text-sm font-bold text-[var(--tari-text)]">{t("l2.balances")}</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="!px-1.5"
-          loading={loading}
-          onClick={() => store.refreshL2()}
-          aria-label={t("l2.refreshBalances")}
-        >
-          <RefreshCw size={12} />
-        </Button>
-      </div>
-
-      {error ? (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-xs text-[var(--st-red)]">
-          <TriangleAlert size={15} className="mt-0.5 shrink-0" />
-          <div>
-            <p className="font-bold">{t("l2.indexerUnreachable")}</p>
-            <p className="mt-1 break-all opacity-80">{error}</p>
-          </div>
-        </div>
-      ) : loading && balances.length === 0 ? (
-        <p className="py-6 text-center text-xs text-zinc-500">{t("l2.loadingBalances")}</p>
-      ) : balances.length === 0 ? (
-        <EmptyState
-          icon={<Wallet size={20} />}
-          title={t("l2.noBalances")}
-          sub={t("l2.noFundsYet")}
+      <div className="flex items-center justify-between gap-2 px-1 pt-1">
+        <Segmented
+          value={tab}
+          onChange={(v) => setTab(v as L2Tab)}
+          options={[
+            { value: "balances", label: t("l2tabs.balances") },
+            { value: "activity", label: `${t("l2tabs.activity")}${activity.length ? ` · ${activity.length}` : ""}` },
+          ]}
         />
-      ) : (
-        <div className="space-y-2.5">
-          {balances.map((b) => (
-            <div
-              key={b.resourceAddress}
-              className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-[var(--tari-text)]">
-                  {b.symbol ?? b.name ?? truncMiddle(b.resourceAddress, 10, 6)}
-                </p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">
-                  {b.kind}
-                  {b.confidentialDecryptFailures > 0
-                    ? t("l2.decryptFailures", { n: b.confidentialDecryptFailures })
-                    : ""}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="tabular font-mono text-sm font-bold text-[var(--tari-text)]">
-                  {b.kind === "NonFungible"
-                    ? // Indivisible by definition — the count itself, never run through
-                      // formatResourceAmount()'s divisibility math (that produced "0" here before
-                      // this vault kind was handled: NonFungible has no `.amount` field at all).
-                      `${b.amount.toString()} ${b.amount === 1n ? t("l2.nft") : t("l2.nfts")}`
-                    : formatResourceAmount(b.amount, b.divisibility)}
-                </p>
-                {b.kind === "NonFungible" && b.nonFungibleTokenIds && b.nonFungibleTokenIds.length > 0 && (
-                  <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={b.nonFungibleTokenIds.join(", ")}>
-                    {b.nonFungibleTokenIds.slice(0, 3).join(", ")}
-                    {b.nonFungibleTokenIds.length > 3 ? t("l2.moreSuffix", { n: b.nonFungibleTokenIds.length - 3 }) : ""}
-                  </p>
-                )}
-                {b.confidentialAmount > 0n && (
-                  <p className="tabular mt-0.5 flex items-center justify-end gap-1 font-mono text-[11px] text-[var(--st-violet)]">
-                    <Lock size={9} />
-                    {t("l2.privateAmount", { amount: formatResourceAmount(b.confidentialAmount, b.divisibility) })}
-                  </p>
-                )}
+        {tab === "balances" ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="!px-1.5"
+            loading={loading}
+            onClick={() => store.refreshL2()}
+            aria-label={t("l2.refreshBalances")}
+          >
+            <RefreshCw size={12} />
+          </Button>
+        ) : (
+          <button
+            onClick={() => onOpenPanel("l2activity")}
+            className="flex items-center gap-0.5 text-xs font-semibold whitespace-nowrap text-zinc-500 hover:text-[var(--tari-text)]"
+          >
+            {t("l2hist.viewAll")} <ChevronRight size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Each tab scrolls on its own, so a long list never pushes the other out of reach. */}
+      <div className="min-h-[220px] flex-1 overflow-y-auto overscroll-contain pr-0.5">
+        {tab === "activity" ? (
+          activity.length === 0 ? (
+            <p className="rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3 text-xs text-zinc-500">
+              {t("l2hist.emptyTitle")}
+            </p>
+          ) : (
+            <div className="divide-y divide-[var(--tari-border)] overflow-hidden rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)]">
+              {activity.map((e) => (
+                <button key={e.id} className="block w-full text-left hover:opacity-90" onClick={() => onOpenPanel("l2activity")}>
+                  <L2ActivityRow e={e} compact />
+                </button>
+              ))}
+            </div>
+          )
+        ) : (
+          <>
+          {error ? (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-red-500/25 bg-red-500/10 p-4 text-xs text-[var(--st-red)]">
+              <TriangleAlert size={15} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-bold">{t("l2.indexerUnreachable")}</p>
+                <p className="mt-1 break-all opacity-80">{error}</p>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          ) : loading && balances.length === 0 ? (
+            <p className="py-6 text-center text-xs text-zinc-500">{t("l2.loadingBalances")}</p>
+          ) : balances.length === 0 ? (
+            <EmptyState
+              icon={<Wallet size={20} />}
+              title={t("l2.noBalances")}
+              sub={t("l2.noFundsYet")}
+            />
+          ) : (
+            <div className="space-y-2.5">
+              {balances.map((b) => (
+                <div
+                  key={b.resourceAddress}
+                  className="flex items-center justify-between gap-4 rounded-2xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-[var(--tari-text)]">
+                      {b.symbol ?? b.name ?? truncMiddle(b.resourceAddress, 10, 6)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-zinc-500">
+                      {b.kind}
+                      {b.confidentialDecryptFailures > 0
+                        ? t("l2.decryptFailures", { n: b.confidentialDecryptFailures })
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="tabular font-mono text-sm font-bold text-[var(--tari-text)]">
+                      {b.kind === "NonFungible"
+                        ? // Indivisible by definition — the count itself, never run through
+                          // formatResourceAmount()'s divisibility math (that produced "0" here before
+                          // this vault kind was handled: NonFungible has no `.amount` field at all).
+                          `${b.amount.toString()} ${b.amount === 1n ? t("l2.nft") : t("l2.nfts")}`
+                        : formatResourceAmount(b.amount, b.divisibility)}
+                    </p>
+                    {b.kind === "NonFungible" && b.nonFungibleTokenIds && b.nonFungibleTokenIds.length > 0 && (
+                      <p className="mt-0.5 truncate text-[11px] text-zinc-500" title={b.nonFungibleTokenIds.join(", ")}>
+                        {b.nonFungibleTokenIds.slice(0, 3).join(", ")}
+                        {b.nonFungibleTokenIds.length > 3 ? t("l2.moreSuffix", { n: b.nonFungibleTokenIds.length - 3 }) : ""}
+                      </p>
+                    )}
+                    {b.confidentialAmount > 0n && (
+                      <p className="tabular mt-0.5 flex items-center justify-end gap-1 font-mono text-[11px] text-[var(--st-violet)]">
+                        <Lock size={9} />
+                        {t("l2.privateAmount", { amount: formatResourceAmount(b.confidentialAmount, b.divisibility) })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

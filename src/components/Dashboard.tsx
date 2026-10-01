@@ -259,7 +259,7 @@ export function Dashboard() {
         >
           <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3">
             {store.layer === "L2" ? (
-              <div className="animate-fade-up">
+              <div className="animate-fade-up flex min-h-0 flex-1 flex-col">
                 <L2Panel onOpenPanel={openPanel} />
               </div>
             ) : (

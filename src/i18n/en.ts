@@ -742,6 +742,10 @@ const en = {
     viewAll: "View all",
     history: "History",
   },
+  l2tabs: {
+    balances: "Balances",
+    activity: "Activity",
+  },
 };
 
 export type TranslationTree = typeof en;

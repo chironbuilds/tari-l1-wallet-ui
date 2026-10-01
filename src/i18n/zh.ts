@@ -741,6 +741,10 @@ const zh: Dictionary = {
     viewAll: "查看全部",
     history: "历史",
   },
+  l2tabs: {
+    balances: "余额",
+    activity: "活动",
+  },
 };
 
 export default zh;
