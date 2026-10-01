@@ -1284,6 +1284,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         const identity = await deriveL2Identity(backupHex);
+        // Private outputs spent from another wallet on this seed are still listed locally until
+        // checked; drop them so the private balance is the real one. Best-effort.
+        await identity.account.pruneSpentShieldedOutputs().catch(() => 0);
         const { balances, error } = await fetchL2Balances(identity.account);
         setL2({ identity, balances, loading: false, error });
       } catch (e) {
@@ -1363,7 +1366,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
       }
       const { found } = await identity.account.scanForPrivatePayments(3);
-      if (found.length > 0 || added > 0) {
+      const pruned = await identity.account.pruneSpentShieldedOutputs().catch(() => 0);
+      if (found.length > 0 || added > 0 || pruned > 0) {
         const fresh = await fetchL2Balances(identity.account);
         balances = fresh.balances;
         setL2((prev) => ({ ...prev, balances: fresh.balances, error: fresh.error }));
