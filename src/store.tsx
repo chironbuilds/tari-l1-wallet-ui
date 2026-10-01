@@ -39,8 +39,8 @@ import {
   selectFastestNodeFor,
   setSelectedNodeId,
 } from "./lib/rpc";
-import { CLAIM_RETRY_MS, burnClaimableNow, claimProofFor, isRetryableClaimError, type BurnRecord } from "./lib/burn";
-import { hasPendingL2, receiptKnown, receiptsSeeded, recordReceipts, withL2Log } from "./lib/l2history";
+import { CLAIM_MIN_CONFIRMATIONS, burnClaimableNow, burnConfirmations, claimProofFor, claimRetryDelayMs, isRetryableClaimError, type BurnRecord } from "./lib/burn";
+import { hasPendingL2, logL2, receiptKnown, receiptsSeeded, recordReceipts, withL2Log } from "./lib/l2history";
 import type { ScannedStealthOutput } from "@chironbuilder/ootle-sdk";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
@@ -1089,15 +1089,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       );
       try {
         const identity = await deriveL2Identity(backupHex);
-        const { transactionId, claimedAmount } = await withL2Log(
-          identity.address,
-          { kind: "claimBurn", amount: rec.amountMicro, divisibility: 6, symbol: "tTARI" },
-          () => identity.account.claimBurn(proof),
-        );
+        const entry = { kind: "claimBurn" as const, amount: rec.amountMicro, divisibility: 6, symbol: "tTARI" };
+        // An automatic attempt that fails is just the wallet checking again, not something the user
+        // did, so only a manual claim's failures go into the Ootle history; a claim that lands is
+        // logged either way.
+        const { transactionId, claimedAmount } = manual
+          ? await withL2Log(identity.address, entry, () => identity.account.claimBurn(proof))
+          : await identity.account.claimBurn(proof).then((r) => {
+              logL2(identity.address, { ...entry, status: "done", transactionId: r.transactionId });
+              return r;
+            });
         setBurns((b) =>
           b.map((r) =>
             r.id === id
-              ? { ...r, status: "claimed", claimTxId: transactionId, claimedMicro: claimedAmount.toString() }
+              ? { ...r, status: "claimed", claimTxId: transactionId, claimedMicro: claimedAmount.toString(), autoAttempts: 0 }
               : r,
           ),
         );
@@ -1110,7 +1115,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           return;
         }
         // The burn stays claimable whatever went wrong, so it returns to waiting either way.
-        setBurns((b) => b.map((r) => (r.id === id ? { ...r, status: "mined", lastError: message } : r)));
+        setBurns((b) =>
+          b.map((r) =>
+            r.id === id ? { ...r, status: "mined", lastError: message, autoAttempts: manual ? r.autoAttempts : (r.autoAttempts ?? 0) + 1 } : r,
+          ),
+        );
         if (manual) throw isRetryableClaimError(message) ? new Error(`Not claimable yet: ${message}`) : e;
       } finally {
         claimingRef.current.delete(id);
@@ -1126,6 +1135,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    * mined burn to this wallet's own account is claimed automatically, retried on a slow cadence
    * because validators only accept it once the L1 block is well confirmed.
    */
+  const tipHeightRef = useRef(tipHeight);
+  tipHeightRef.current = tipHeight;
+
   const advanceBurns = useCallback(async () => {
     for (const rec of burnsRef.current) {
       // A burn this wallet hasn't seen claimed may have been claimed elsewhere (the proof exported
@@ -1183,7 +1195,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rec.status === "mined" &&
         rec.toOwnAccount &&
         burnClaimableNow(network) &&
-        Date.now() - (rec.lastAttemptAt ?? 0) >= CLAIM_RETRY_MS
+        // Not before validators can see the block (unknown depth: fall back to the retry delay alone).
+        (burnConfirmations(rec, tipHeightRef.current) ?? CLAIM_MIN_CONFIRMATIONS) >= CLAIM_MIN_CONFIRMATIONS &&
+        Date.now() - (rec.lastAttemptAt ?? 0) >= claimRetryDelayMs(rec.autoAttempts ?? 0)
       ) {
         void claimBurn(rec.id, false);
       }

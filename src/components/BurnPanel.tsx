@@ -7,9 +7,12 @@ import { coinSymbol, networkLabel, estimateMaxSpend, selectInputs, submitViaMidd
 import { fetchMiddlewareTip } from "../lib/scanner";
 import { downloadText, formatMicro, tariToMicro, tick, timeAgo, truncMiddle } from "../lib/format";
 import {
+  CLAIM_MIN_CONFIRMATIONS,
   burnClaimableNow,
+  burnConfirmations,
   claimProofFileText,
   isAwaitingL1Observation,
+  isRetryableClaimError,
   partsFromSignedBurn,
   type BurnRecord,
 } from "../lib/burn";
@@ -397,7 +400,7 @@ function stepIndex(rec: BurnRecord): number {
   }
 }
 
-function statusText(rec: BurnRecord, claimable: boolean): string {
+function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | null): string {
   if (!claimable && (rec.status === "mined" || rec.status === "claiming")) {
     return translate("burn.minedNotClaimable");
   }
@@ -406,7 +409,13 @@ function statusText(rec: BurnRecord, claimable: boolean): string {
       return translate("burn.waitingMined");
     case "mined":
       if (!rec.toOwnAccount) return translate("burn.mined");
-      return isAwaitingL1Observation(rec.lastError) ? translate("burn.waitingObserve") : translate("burn.waitingConfirmations");
+      {
+        const confirmations = burnConfirmations(rec, tipHeight);
+        if (confirmations !== null && confirmations < CLAIM_MIN_CONFIRMATIONS) {
+          return translate("burn.waitingConfirmationsCount", { n: confirmations, total: CLAIM_MIN_CONFIRMATIONS });
+        }
+      }
+      return isRetryableClaimError(rec.lastError ?? "") ? translate("burn.waitingObserve") : translate("burn.waitingConfirmations");
     case "claiming":
       return translate("burn.claimingOotle");
     case "claimed":
@@ -469,7 +478,7 @@ function BurnList() {
                 </div>
                 <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500">
                   {(rec.status === "broadcast" || rec.status === "claiming") && <Loader2 size={12} className="animate-spin" />}
-                  {statusText(rec, claimable)}
+                  {statusText(rec, claimable, store.tipHeight)}
                 </span>
               </div>
 
@@ -491,7 +500,7 @@ function BurnList() {
                 </ol>
               )}
 
-              {rec.lastError && rec.status === "mined" && !isAwaitingL1Observation(rec.lastError) && (
+              {rec.lastError && rec.status === "mined" && !isRetryableClaimError(rec.lastError) && (
                 <p className="mt-2 text-[11px] break-words text-zinc-500">{t("burn.lastAttempt", { error: rec.lastError.slice(0, 200) })}</p>
               )}
 

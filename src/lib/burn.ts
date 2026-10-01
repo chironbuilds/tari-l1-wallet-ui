@@ -71,6 +71,8 @@ export interface BurnRecord {
   /** The last reason a claim did not go through; cleared on the next attempt. */
   lastError?: string;
   lastAttemptAt?: number;
+  /** Automatic claim attempts that failed in a row; spaces out the next one (see claimRetryDelayMs). */
+  autoAttempts?: number;
 }
 
 export function partsFromSignedBurn(burn: WasmSignedBurn): StoredBurnParts {
@@ -141,3 +143,21 @@ export function isAwaitingL1Observation(message: string | undefined): boolean {
 
 /** Minimum wait between automatic claim attempts. */
 export const CLAIM_RETRY_MS = 3 * 60_000;
+
+/**
+ * L1 blocks a burn must be buried under before Ootle validators can see it: they follow the L1 tip
+ * at `base_layer_confirmations` (Esmeralda 100), plus a few for epoch rounding. Claiming earlier
+ * only fails with "block header not found", so the wallet doesn't try.
+ */
+export const CLAIM_MIN_CONFIRMATIONS = 105;
+
+/** Confirmations a mined burn has, or null when its block or the tip isn't known. */
+export function burnConfirmations(rec: BurnRecord, tipHeight: number | null): number | null {
+  if (!rec.minedHeight || !tipHeight) return null;
+  return Math.max(0, tipHeight - rec.minedHeight + 1);
+}
+
+/** Wait before the next automatic claim after `failures` failed ones in a row: 3, 6, 12, then 20 minutes. */
+export function claimRetryDelayMs(failures: number): number {
+  return Math.min(CLAIM_RETRY_MS * 2 ** Math.max(0, failures), 20 * 60_000);
+}

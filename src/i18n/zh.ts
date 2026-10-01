@@ -518,6 +518,7 @@ const zh: Dictionary = {
     mined: "已打包",
     waitingObserve: "等待 Ootle 观察到该 L1 区块——正在自动重试",
     waitingConfirmations: "等待确认，之后自动认领",
+    waitingConfirmationsCount: "已确认 {n}/{total} — 之后自动认领",
     claimingOotle: "正在 Ootle 上认领…",
     claimedElsewhere: "已被其他钱包在 Ootle 上认领 · {amount} tTARI",
     claimed: "已认领 {amount} tTARI",

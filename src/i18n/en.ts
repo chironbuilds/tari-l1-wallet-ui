@@ -519,6 +519,7 @@ const en = {
     mined: "Mined",
     waitingObserve: "Waiting for Ootle to observe the L1 block — retrying automatically",
     waitingConfirmations: "Waiting for confirmations, then claimed automatically",
+    waitingConfirmationsCount: "{n} of {total} confirmations — claimed automatically after that",
     claimingOotle: "Claiming on Ootle…",
     claimedElsewhere: "Claimed on Ootle by another wallet · {amount} tTARI",
     claimed: "Claimed {amount} tTARI",
