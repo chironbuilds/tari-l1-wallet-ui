@@ -157,6 +157,15 @@ export function capabilitiesFor(origin: string | null) {
     /** `tari_signWalletOwnershipChallenge` — proves control of the wallet address itself, not tied
      * to any particular output. */
     walletOwnershipProof: true,
+    /**
+     * Minotari L1 GGBP-1 v3 aggregate-threshold proof (`GGBP1R` wire version 0x03). Explicitly
+     * unavailable: this wallet has no wallet-owned v3 prover, no authenticated chain verifier and
+     * no proof method, so `tari_requestBalanceProof` is answered `4200 Unsupported method`. GGBP-1
+     * v2 is unsafe for wallet signing and must never be implemented. Generic signatures, output
+     * values, keys and transaction builders are not substitutes. Kept the literal `false` by the
+     * compile-time guard below `BridgeCapabilities`. See docs/GGBP1_GHOST_GATE_HANDOFF.md.
+     */
+    ggbp1BalanceProof: false as const,
     /** The `depositConfidential` transaction-request kind — moves revealed balance into a
      * Confidential-type vault, a different privacy mechanism from the Stealth surface above. */
     confidentialDeposit: true,
@@ -169,6 +178,14 @@ export function capabilitiesFor(origin: string | null) {
 }
 
 export type BridgeCapabilities = ReturnType<typeof capabilitiesFor>;
+
+/**
+ * Compile-time guard, no runtime code: `ggbp1BalanceProof` must stay the literal `false` until a
+ * reviewed GGBP-1 v3 wallet prover and independent chain verifier exist. Setting it to `true`, or
+ * widening it to `boolean`, fails `npm run typecheck` here.
+ */
+type Ggbp1MustStayDisabled<T extends false> = T;
+type _Ggbp1BalanceProofDisabled = Ggbp1MustStayDisabled<BridgeCapabilities["ggbp1BalanceProof"]>;
 
 /* ---------------------------------------------------------------------------------------------
  * `minimumValuePromise` (on the `shield` and `sendPrivately` operation kinds)
