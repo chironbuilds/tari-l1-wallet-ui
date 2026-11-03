@@ -68,8 +68,26 @@ interface Capabilities {
   transactionRequests: boolean;
   walletAddress: boolean;
   dryRunIsLocal: boolean;
+  // Minotari L1 GGBP-1 v3 aggregate-threshold proof. Always false in this wallet: there is no
+  // wallet-owned v3 prover, no chain verifier and no proof method. Never infer it from generic
+  // signing, L1 output values, or Ootle ownership proofs.
+  ggbp1BalanceProof: false;
 }
 ```
+
+`ggbp1BalanceProof` is `false`, and this wallet has no GGBP-1 method of any kind. A dApp must treat
+the capability as unavailable and fail closed. A request for the proposed `tari_requestBalanceProof`
+method is answered `4200 Unsupported method`, the same as any other method this wallet does not
+implement. A dApp must not ask for a generic signature, an output value, a seed, a key, a mask, a
+transaction or an Ootle ownership proof as a substitute. Nothing in this API produces GGBP-1
+evidence.
+
+The only GGBP-1 version under review is the experimental, hardened **v3** (`GGBP1R` wire version
+`0x03`). Version 2 is unsafe for wallet signing (its prover took caller-controlled randomness) and
+must never be implemented, signed or accepted. Even a cryptographically valid v3 response does not
+show that anyone holds spendable Tari outputs. See `docs/GGBP1_GHOST_GATE_HANDOFF.md` for the v3
+format, the prerequisites that must be met before the capability could ever become anything but
+`false`, and the open design work in `docs/ggbp1/`.
 
 ---
 
