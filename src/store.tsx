@@ -29,7 +29,7 @@ const POOL_MIN_BLOCKS = 50;
 import { fetchChainTip } from "./lib/explorer";
 import { burnClaimedOnOotle, deriveL2Identity, fetchL2Balances, fetchL2Deposits, type L2Identity } from "./lib/l2";
 import { attributePayment, deriveSubAddress, type SubAddress } from "./lib/subaddress";
-import { OOTLE_NETWORK, TARI_RESOURCE_ADDRESS, toOotleNetwork, wipeOotleState, type TokenBalance } from "./ootle";
+import { TARI_RESOURCE_ADDRESS, indexerUrlFor, l2Symbol, ootleNetworkFor, wipeOotleState, type TokenBalance } from "./ootle";
 import { decryptWithPin, encryptWithPin, needsRekey, type EncryptedBlob } from "./lib/pinLock";
 import {
   AUTO_NODE_ID,
@@ -45,7 +45,6 @@ import {
 import { CLAIM_MIN_CONFIRMATIONS, burnClaimableNow, burnConfirmations, claimProofFor, claimRetryDelayMs, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 import { hasPendingL2, logL2, receiptKnown, receiptsSeeded, recordReceipts, withL2Log } from "./lib/l2history";
 import type { ScannedStealthOutput } from "@chironbuilder/ootle-sdk";
-import { defaultIndexerUrl } from "@tari-project/ootle";
 
 const STORAGE_KEY = "tari-l1-wallet/v1";
 
@@ -415,6 +414,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [wallet, setWallet] = useState<WasmWallet | null>(null);
   const [network, setNetwork] = useState<NetworkId | null>(null);
+  // The Ootle network that goes with this L1 one (see ootleNetworkFor). A network switch reloads
+  // the app, so this is fixed for the life of the page once the wallet has loaded.
+  const ootleNet = ootleNetworkFor(network);
   const [backupHex, setBackupHex] = useState<string | null>(null);
   const [encBackup, setEncBackup] = useState<EncryptedBlob | null>(null);
   const [walletLocked, setWalletLocked] = useState(false);
@@ -1064,10 +1066,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const ootleClaimPublicKey = useCallback(async (): Promise<string> => {
     if (!backupHex) throw new Error("No wallet loaded.");
-    const identity = await deriveL2Identity(backupHex);
+    const identity = await deriveL2Identity(backupHex, ootleNet);
     const key = await identity.account.getPublicKey();
     return Array.from(key, (b) => b.toString(16).padStart(2, "0")).join("");
-  }, [backupHex]);
+  }, [backupHex, ootleNet]);
 
   /** A burn the chain shows as claimed that this wallet didn't claim itself. */
   const markClaimedElsewhere = useCallback((id: string, valueMicro?: bigint) => {
@@ -1099,13 +1101,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       try {
         // Claimed already (an earlier attempt that landed, or another wallet): don't send a claim
         // the engine is bound to reject. An unreachable indexer decides nothing; the claim goes ahead.
-        const already = await burnClaimedOnOotle(rec.parts.commitmentHex).catch(() => null);
+        const already = await burnClaimedOnOotle(rec.parts.commitmentHex, ootleNet).catch(() => null);
         if (already !== null) {
           markClaimedElsewhere(id, already);
           return;
         }
-        const identity = await deriveL2Identity(backupHex);
-        const entry = { kind: "claimBurn" as const, amount: rec.amountMicro, divisibility: 6, symbol: "tTARI" };
+        const identity = await deriveL2Identity(backupHex, ootleNet);
+        const entry = { kind: "claimBurn" as const, amount: rec.amountMicro, divisibility: 6, symbol: l2Symbol(ootleNet) };
         // An automatic attempt that fails is just the wallet checking again, not something the user
         // did, so only a manual claim's failures go into the Ootle history; a claim that lands is
         // logged either way.
@@ -1142,7 +1144,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         claimingRef.current.delete(id);
       }
     },
-    [backupHex, markClaimedElsewhere],
+    [backupHex, ootleNet, markClaimedElsewhere],
   );
 
   const claimBurnNow = useCallback((id: string) => claimBurn(id, true), [claimBurn]);
@@ -1168,7 +1170,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           (rec.status === "claiming" && !claimingRef.current.has(rec.id)))
       ) {
         try {
-          const claimed = await burnClaimedOnOotle(rec.parts.commitmentHex);
+          const claimed = await burnClaimedOnOotle(rec.parts.commitmentHex, ootleNetworkFor(network));
           if (claimed !== null) {
             markClaimedElsewhere(rec.id, claimed);
             continue;
@@ -1297,7 +1299,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setL2((prev) => ({ ...prev, loading: true, error: null }));
     void (async () => {
       try {
-        const identity = await deriveL2Identity(backupHex);
+        const identity = await deriveL2Identity(backupHex, ootleNet);
         // Private outputs spent from another wallet on this seed are still listed locally until
         // checked; drop them so the private balance is the real one. Best-effort.
         await identity.account.pruneSpentShieldedOutputs().catch(() => 0);
@@ -1312,7 +1314,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
       }
     })();
-  }, [backupHex]);
+  }, [backupHex, ootleNet]);
   const refreshL2Ref = useRef(refreshL2);
   refreshL2Ref.current = refreshL2;
 
@@ -1330,7 +1332,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const { claimed, found } = await account.scanForPrivatePayments();
       // Also scan the live UTXO set for the TARI resource: finds outputs that exist on-chain
       // regardless of age or how they were created, without requiring full history retention.
-      const indexerBaseUrl = defaultIndexerUrl(toOotleNetwork(OOTLE_NETWORK));
+      const indexerBaseUrl = indexerUrlFor(account.network);
       await account.scanForOwnedUtxos(TARI_RESOURCE_ADDRESS, indexerBaseUrl).catch(() => undefined);
       const { balances, error } = await fetchL2Balances(account);
       setL2((prev) => ({ ...prev, balances, error, loading: false }));
@@ -1385,7 +1387,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       const { found } = await identity.account.scanForPrivatePayments(3);
       // Delta-scan the live UTXO set (cheap on repeat calls, uses saved watermarks).
-      const indexerBaseUrl = defaultIndexerUrl(toOotleNetwork(OOTLE_NETWORK));
+      const indexerBaseUrl = indexerUrlFor(identity.account.network);
       await identity.account.scanForOwnedUtxos(TARI_RESOURCE_ADDRESS, indexerBaseUrl).catch(() => undefined);
       const pruned = await identity.account.pruneSpentShieldedOutputs().catch(() => 0);
       if (found.length > 0 || added > 0 || pruned > 0) {

@@ -1,7 +1,7 @@
 import { QrCode } from "lucide-react";
 import { useStore } from "../store";
 import { AddressQr } from "./Dashboard";
-import { OOTLE_NETWORK_LABEL } from "../ootle";
+import { ootleNetworkFor, ootleNetworkLabel } from "../ootle";
 import { copyText } from "../lib/format";
 import { useToast } from "./toast";
 import { useI18n } from "../i18n";
@@ -52,7 +52,7 @@ export function L2ReceivePanel() {
       </div>
 
       <p className="mt-5 text-[11px] leading-relaxed text-zinc-500">
-        {t("l2receive.networkNote", { network: OOTLE_NETWORK_LABEL })}
+        {t("l2receive.networkNote", { network: ootleNetworkLabel(ootleNetworkFor(store.network)) })}
       </p>
     </div>
   );

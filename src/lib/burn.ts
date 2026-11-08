@@ -8,13 +8,20 @@ import {
 import type { NetworkId } from "./tari";
 
 /**
+ * Flip to `true` once an L1 MainNet burn has been claimed on Ootle MainNet end to end (mainnet
+ * launches 2026-11-11). Until then a mainnet burn destroys real XTM with nothing verified to mint
+ * it back, so mainnet stays behind the "not claimable yet" warning like any other unobserved L1.
+ */
+export const MAINNET_BURN_CLAIMS_LIVE = false;
+
+/**
  * Whether a burn on `network` can be claimed today. A burn can only be claimed on the Ootle network
- * that observes the L1 it was burned on, and Ootle runs on the Esmeralda testnet alone. Burning is
- * still allowed elsewhere, behind a warning; those burns are tracked and their proofs exported, but
- * never claimed automatically.
+ * that observes the L1 it was burned on: Esmeralda's, and MainNet's once MAINNET_BURN_CLAIMS_LIVE.
+ * Burning is still allowed elsewhere, behind a warning; those burns are tracked and their proofs
+ * exported, but never claimed automatically.
  */
 export function burnClaimableNow(network: NetworkId | null): boolean {
-  return network === "esmeralda";
+  return network === "esmeralda" || (network === "mainnet" && MAINNET_BURN_CLAIMS_LIVE);
 }
 
 /**

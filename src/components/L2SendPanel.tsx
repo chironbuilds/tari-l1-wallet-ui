@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Eye, EyeOff, Send, Wallet } from "lucide-react";
 import { useStore } from "../store";
 import { parseOotleAddress } from "@tari-project/ootle-wasm";
-import { OOTLE_NETWORK, TARI_RESOURCE_ADDRESS, formatResourceAmount, toOotleNetwork, type TokenBalance } from "../ootle";
+import { TARI_RESOURCE_ADDRESS, formatResourceAmount, ootleNetworkFor, toOotleNetwork, type TokenBalance } from "../ootle";
 import { truncMiddle } from "../lib/format";
 import { useToast } from "./toast";
 import { Button, Field, TextInput } from "./ui";
@@ -77,14 +77,14 @@ export function L2SendPanel({ initialMode = "send" }: { initialMode?: Mode } = {
     if (!value) return { valid: false, message: null };
     try {
       const parsed = parseOotleAddress(value);
-      if (parsed.network !== toOotleNetwork(OOTLE_NETWORK)) {
+      if (parsed.network !== toOotleNetwork(ootleNetworkFor(store.network))) {
         return { valid: false, message: t("l2send.wrongNetwork") };
       }
       return { valid: true, message: t("l2send.validAddress") };
     } catch {
       return { valid: false, message: t("l2send.invalidAddress") };
     }
-  }, [recipient, t]);
+  }, [recipient, t, store.network]);
   const recipientValid = recipientCheck.valid;
   const needsRecipient = mode === "send" || mode === "sendPrivately";
   const overBalance = amountRaw !== null && amountRaw > available;

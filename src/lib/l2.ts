@@ -6,8 +6,8 @@
 // controls both, and neither side needs the other's keys.
 
 import { decipherSeed } from "tari-cipherseed";
-import { defaultIndexerUrl, getVaultIdsForAccount } from "@tari-project/ootle";
-import { OOTLE_NETWORK, OotleAccount, toOotleNetwork, type TokenBalance } from "../ootle";
+import { getVaultIdsForAccount } from "@tari-project/ootle";
+import { OotleAccount, indexerUrlFor, toOotleNetwork, type NetworkName, type TokenBalance } from "../ootle";
 import { hexToBytes } from "./cipherseed";
 import { decodeEvent, decodeSubstateValue } from "./bor";
 
@@ -28,9 +28,9 @@ export interface L2Identity {
  * Deriving keys is pure and local; nothing here touches the network, so this stays cheap enough
  * to call on demand rather than keeping a second wallet alive alongside the L1 one.
  */
-export async function deriveL2Identity(backupHex: string): Promise<L2Identity> {
+export async function deriveL2Identity(backupHex: string, network: NetworkName): Promise<L2Identity> {
   const seed = await decipherSeed(hexToBytes(backupHex));
-  const account = OotleAccount.fromSeed(seed.entropy, ACCOUNT_INDEX, OOTLE_NETWORK);
+  const account = OotleAccount.fromSeed(seed.entropy, ACCOUNT_INDEX, network);
   const [address, componentAddress] = await Promise.all([
     account.getWalletAddress(),
     account.getComponentAddress(),
@@ -65,8 +65,8 @@ export async function fetchL2Balances(account: OotleAccount): Promise<L2Balances
  * claim of the same commitment. Returns the claimed value, or null while it is unclaimed. Throws
  * when the indexer can't answer, so a network error is never read as "unclaimed".
  */
-export async function burnClaimedOnOotle(commitmentHex: string): Promise<bigint | null> {
-  const base = defaultIndexerUrl(toOotleNetwork(OOTLE_NETWORK));
+export async function burnClaimedOnOotle(commitmentHex: string, network: NetworkName): Promise<bigint | null> {
+  const base = indexerUrlFor(toOotleNetwork(network));
   const res = await fetch(`${base}/substates/tombstone_${commitmentHex.toLowerCase()}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`indexer ${res.status}`);
@@ -114,7 +114,7 @@ export async function fetchL2Deposits(identity: L2Identity, known: (key: string)
   const vaultIds = await getVaultIdsForAccount(provider, identity.componentAddress as Parameters<typeof getVaultIdsForAccount>[1]);
   if (vaultIds.length === 0) return [];
   const { substates } = await provider.fetchSubstates(vaultIds);
-  const base = defaultIndexerUrl(toOotleNetwork(OOTLE_NETWORK));
+  const base = indexerUrlFor(identity.account.network);
   const out: L2Deposit[] = [];
   for (const vaultId of vaultIds) {
     const value = decodeSubstateValue(substates[vaultId]?.value) as { Vault?: { resource_container: Record<string, { address?: string }> } } | undefined;
