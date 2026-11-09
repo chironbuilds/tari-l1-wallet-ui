@@ -7,6 +7,7 @@ import { useToast } from "./toast";
 import { Button, Field } from "./ui";
 import { useI18n } from "../i18n";
 import { withL2Log } from "../lib/l2history";
+import { l2Symbol, ootleNetworkFor } from "../ootle";
 
 /**
  * Claims a burn made from another wallet — typically `minotari_console_wallet`, which writes a
@@ -43,12 +44,12 @@ export function ClaimBurnPanel() {
       const proof = parsed.proof;
       const { claimedAmount } = await withL2Log(
         store.l2.identity?.address,
-        { kind: "claimBurn", amount: String(proof.claim_proof.value), divisibility: 6, symbol: "tTARI" },
+        { kind: "claimBurn", amount: String(proof.claim_proof.value), divisibility: 6, symbol: l2Symbol(ootleNetworkFor(store.network)) },
         () => account.claimBurn(proof),
       );
       setClaimed(claimedAmount);
       store.refreshL2();
-      toast({ tone: "success", title: t("claimburn.claimedTitle"), message: t("claimburn.claimedMessage", { amount: formatMicro(claimedAmount) }) });
+      toast({ tone: "success", title: t("claimburn.claimedTitle"), message: t("claimburn.claimedMessage", { amount: formatMicro(claimedAmount), symbol: l2Symbol(ootleNetworkFor(store.network)) }) });
     } catch (e) {
       toast({ tone: "error", title: t("claimburn.notAccepted"), message: e instanceof Error ? e.message.slice(0, 200) : String(e) });
     } finally {
@@ -115,7 +116,7 @@ export function ClaimBurnPanel() {
 
       {claimed !== null ? (
         <p className="mt-5 flex items-center gap-2 text-sm font-semibold text-[var(--st-green)]">
-          <Check size={16} /> {t("claimburn.claimedAmount", { amount: formatMicro(claimed) })}
+          <Check size={16} /> {t("claimburn.claimedAmount", { amount: formatMicro(claimed), symbol: l2Symbol(ootleNetworkFor(store.network)) })}
         </p>
       ) : (
         <Button

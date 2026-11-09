@@ -34,6 +34,7 @@ export type BridgeMethod =
   | "tari_requestAccounts"
   | "tari_getAccounts"
   | "tari_getNetwork"
+  | "tari_switchNetwork"
   | "tari_getWalletAddress"
   | "tari_getBalances"
   | "tari_getSubstate"
@@ -60,8 +61,9 @@ export type BridgeMethod =
   | "tari_signWalletOwnershipChallenge"
   | "tari_disconnect";
 
-/** Answerable without a connection, matching the extension (any page may ask the network). */
-export const OPEN_METHODS: BridgeMethod[] = ["tari_getNetwork"];
+/** Answerable without a connection, matching the extension (any page may ask the network, and may
+ * ask the user to switch it -- `tari_switchNetwork` always prompts). */
+export const OPEN_METHODS: BridgeMethod[] = ["tari_getNetwork", "tari_switchNetwork"];
 
 /** Answerable once connected, with no further approval. */
 export const CONNECTED_METHODS: BridgeMethod[] = [

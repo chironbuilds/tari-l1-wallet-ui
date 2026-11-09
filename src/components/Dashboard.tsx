@@ -338,7 +338,7 @@ export function Dashboard() {
                 <span className="flex items-center gap-2 text-xs font-bold">
                   <Layers size={14} /> {t("dash.ootleLayer2")}
                 </span>
-                <span className="text-[10px] opacity-70">{t("common.esmeraldaTestnet")}</span>
+                <span className="text-[10px] opacity-70">{t(isMainnet ? "common.mainnet" : "common.esmeraldaTestnet")}</span>
               </button>
               {/* Only a nudge while the wallet is unprotected; once a PIN is set, settings stay
                   reachable from the rail's gear icon. */}

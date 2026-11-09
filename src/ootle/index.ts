@@ -15,29 +15,39 @@ void migrateOotleStorageOnce();
 
 export { OotleAccount } from "@chironbuilder/ootle-sdk";
 export type { FeeType, PrivateBalance, TokenBalance } from "@chironbuilder/ootle-sdk";
-export { toOotleNetwork } from "@chironbuilder/ootle-sdk";
+export { indexerUrlFor, toOotleNetwork } from "@chironbuilder/ootle-sdk";
 export type { NetworkName } from "@chironbuilder/ootle-sdk";
 export { wipeOotleState } from "@chironbuilder/ootle-sdk";
 export type { ShieldedOutputRecord } from "@chironbuilder/ootle-sdk";
 
+import type { NetworkName } from "@chironbuilder/ootle-sdk";
+import type { NetworkId } from "../lib/tari";
+
 /**
- * The L2 network this wallet talks to.
- *
- * Ootle has no public MainNet indexer — `defaultIndexerUrl(Network.MainNet)` throws, and the only
- * endpoint the SDK ships is Esmeralda's (`https://ootle-indexer-a.tari.com`). The L1 side of this
- * wallet is MainNet, so the two layers are deliberately not on the same network, and every L2
- * surface says so. Both are derived from the same seed, so the account is genuinely yours; the
- * funds on it are test TARI.
+ * The Ootle (L2) network that goes with an L1 network: MainNet with MainNet, and every testnet L1
+ * with Esmeralda -- the only Ootle testnet with a public indexer, and the one that observes the
+ * Esmeralda L1, so burns made there can be claimed. Switching the L1 network (which reloads the
+ * app) therefore switches the L2 one too; both come from the same seed, so the account on each is
+ * genuinely yours, and only the mainnet one holds real TARI.
  */
-export const OOTLE_NETWORK = "esmeralda" as const;
+export function ootleNetworkFor(l1: NetworkId | null | undefined): NetworkName {
+  return l1 === "mainnet" ? "mainnet" : "esmeralda";
+}
+
+/** The L2 token's ticker on `network`: real TARI on mainnet, test tTARI elsewhere. */
+export function l2Symbol(network: NetworkName): string {
+  return network === "mainnet" ? "TARI" : "tTARI";
+}
 
 /** The Ootle native token (TARI, formerly XTR) -- engine-special-cased on-chain, so its resource
  * address is a fixed, well-known constant. Match on this, never on the on-chain symbol, which
  * changed with the XTR -> TARI rename. */
 export const TARI_RESOURCE_ADDRESS = "resource_0101010101010101010101010101010101010101010101010101010101010101";
 
-/** Shown wherever an L2 balance or address appears, so test funds are never mistaken for XTM. */
-export const OOTLE_NETWORK_LABEL = "Esmeralda testnet";
+/** Shown wherever an L2 balance or address appears, so test funds are never mistaken for real ones. */
+export function ootleNetworkLabel(network: NetworkName): string {
+  return network === "mainnet" ? "MainNet" : network === "esmeralda" ? "Esmeralda testnet" : "Igor testnet";
+}
 
 /** Formats a raw resource amount using the resource's own on-chain divisibility. */
 export function formatResourceAmount(amount: bigint, divisibility: number): string {

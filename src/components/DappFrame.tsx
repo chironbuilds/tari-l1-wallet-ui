@@ -40,7 +40,7 @@ import {
 } from "../lib/dappRequests";
 import { previewOperation, type RawPreview } from "../lib/dappPreview";
 import { hostOf } from "../lib/dapps";
-import { OOTLE_NETWORK, TARI_RESOURCE_ADDRESS, formatResourceAmount, type TokenBalance } from "../ootle";
+import { TARI_RESOURCE_ADDRESS, formatResourceAmount, ootleNetworkFor, ootleNetworkLabel, type TokenBalance } from "../ootle";
 
 /** TARI's on-chain divisibility on Ootle -- the fee is always paid in it. */
 const TARI_DIVISIBILITY = 6;
@@ -55,7 +55,9 @@ interface ApprovalState {
   /** Which dialog voice to use. "connect" and "view" are permission grants — nothing is spent, so
    * the "this spends real funds" warning would be false and, worse, would train users to ignore it
    * where it is true. "spend" is everything that moves value. */
-  tone: "connect" | "view" | "spend";
+  tone: "connect" | "view" | "spend" | "network";
+  /** An extra warning shown in its own box (a network switch onto MainNet's real-money notice). */
+  notice?: string;
   /** Present only for a transaction request (every `REQUEST_METHODS` operation). `enforced: true`
    * means the dApp set `enforceFeeType` — the dialog shows `initial` as a locked fact, not a
    * choice. Otherwise the dialog renders an editable toggle seeded at `initial` (the dApp's
@@ -226,6 +228,7 @@ export function DappFrame({
       params: Record<string, unknown>,
       options: {
         tone?: ApprovalState["tone"];
+        notice?: string;
         summary?: string[];
         feeChoice?: ApprovalState["feeChoice"];
         /** Simulates the request once its dialog is showing; `null` = nothing to preview. */
@@ -242,6 +245,7 @@ export function DappFrame({
               method,
               summary: options.summary ?? describeRequest(method, params),
               tone: options.tone ?? "spend",
+              notice: options.notice,
               feeChoice: options.feeChoice,
               preview: options.previewer ? "loading" : undefined,
               decide: (approved) => {
@@ -277,15 +281,37 @@ export function DappFrame({
       // Matches the extension's own gating: the network is answerable to any page, everything
       // else needs a connection the user granted.
       //
-      // This must be OOTLE_NETWORK ("esmeralda"), not `s.network`: `s.network` is the *L1* wallet's
-      // own network (always "mainnet" today -- see Welcome.tsx, which hardcodes it with no UI to
-      // change it, and OOTLE_NETWORK's own doc comment on why the two layers are deliberately not
-      // the same network). Every dApp bridge call here (`tari_getDefaultAccount`, `component_...`
-      // addresses, everything else in this handler) is talking to Ootle, not to L1, and a dApp that
-      // gates on `tari_getNetwork` returning "esmeralda" -- exactly as real dApps do, e.g. checking
-      // `String(network).toLowerCase().includes('esmeralda')` -- would otherwise be told "mainnet"
-      // and refuse to connect, even though the wallet is on the only network Ootle actually runs on.
-      if (req.method === "tari_getNetwork") return { result: OOTLE_NETWORK };
+      // The *Ootle* network, not `s.network` (the L1 one): every call in this bridge talks to Ootle.
+      // ootleNetworkFor pairs them -- MainNet with MainNet, every testnet L1 with Esmeralda -- so a
+      // dApp on a testnet L1 is told "esmeralda", the network its Ootle account really lives on.
+      if (req.method === "tari_getNetwork") return { result: ootleNetworkFor(s.network) };
+
+      // MetaMask's wallet_switchEthereumChain: a dApp may ask, only the user decides. Here the L1
+      // and Ootle networks move together, and a switch reloads the whole app (which ends this
+      // frame), so the answer goes back to the dApp first and the reload follows.
+      if (req.method === "tari_switchNetwork") {
+        const target = params.network;
+        if (target !== "mainnet" && target !== "esmeralda") {
+          return { error: ERROR.internal('This wallet runs Ootle on "mainnet" or "esmeralda".') };
+        }
+        const current = ootleNetworkFor(s.network);
+        if (target === current) return { result: target };
+        const approved = await askUser(req.id, req.method, params, {
+          tone: "network",
+          summary: [
+            t("frame.switchNetworkLine", { from: ootleNetworkLabel(current), to: ootleNetworkLabel(target) }),
+            t("frame.switchNetworkReload"),
+          ],
+          notice: target === "mainnet" ? t("frame.mainnetWarning") : undefined,
+        });
+        if (!approved) return { error: ERROR.rejected };
+        // The network may have moved while the prompt was open (another tab, Settings).
+        if (ootleNetworkFor(storeRef.current.network) !== current) {
+          return { error: ERROR.internal("The wallet's network changed while this request was open. Ask again.") };
+        }
+        setTimeout(() => storeRef.current.switchNetwork(target), 150);
+        return { result: target };
+      }
 
       if (req.method === "tari_disconnect") {
         if (origin) {
@@ -854,7 +880,9 @@ export function DappFrame({
                   ? t("frame.askConnect")
                   : approval.tone === "view"
                     ? t("frame.askView")
-                    : t("frame.askApprove")}
+                    : approval.tone === "network"
+                      ? t("frame.askSwitchNetwork")
+                      : t("frame.askApprove")}
               </p>
               <p className="mt-1 font-mono text-[11px] break-all text-[var(--tari-text-dim)]">
                 {origin}
@@ -928,9 +956,20 @@ export function DappFrame({
                   {t("frame.viewWarning")}
                 </p>
               )}
+              {approval.notice && (
+                <p className="mt-4 rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 p-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
+                  {approval.notice}
+                </p>
+              )}
               <div className="mt-4 flex gap-2.5">
                 <Button className="flex-1" disabled={!approveArmed} onClick={() => approveArmed && approval.decide(true)}>
-                  {approval.tone === "connect" ? t("frame.connect") : approval.tone === "view" ? t("frame.showBalance") : t("frame.approve")}
+                  {approval.tone === "connect"
+                    ? t("frame.connect")
+                    : approval.tone === "view"
+                      ? t("frame.showBalance")
+                      : approval.tone === "network"
+                        ? t("frame.switchNetwork")
+                        : t("frame.approve")}
                 </Button>
                 <Button variant="outline" className="flex-1" onClick={() => approval.decide(false)}>
                   {approval.tone === "spend" ? t("frame.reject") : t("frame.deny")}

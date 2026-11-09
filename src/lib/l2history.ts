@@ -7,6 +7,8 @@
 // Components read it through useL2History(), which re-renders them when an entry is added or
 // settled.
 import { useSyncExternalStore } from "react";
+import { explorerUrl } from "./dapps";
+import type { NetworkName } from "../ootle";
 
 export type L2ActivityKind = "send" | "sendPrivately" | "shield" | "unshield" | "claimBurn" | "dapp" | "received" | "receivedPrivately";
 export type L2ActivityStatus = "pending" | "done" | "failed";
@@ -200,6 +202,6 @@ export function useL2History(account: string | undefined): L2Activity[] {
 const EMPTY: L2Activity[] = [];
 
 /** Where a transaction can be looked at: Veil, the Ootle explorer. */
-export function explorerTxUrl(transactionId: string): string {
-  return `https://explorer.tari.mw/tx/${transactionId}`;
+export function explorerTxUrl(transactionId: string, network: NetworkName): string {
+  return `${explorerUrl(network)}/tx/${transactionId}`;
 }

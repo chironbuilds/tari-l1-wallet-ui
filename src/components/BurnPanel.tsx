@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { parseOotleAddress } from "@tari-project/ootle-wasm";
-import { OOTLE_NETWORK, toOotleNetwork } from "../ootle";
+import { l2Symbol as l2SymbolFor, ootleNetworkFor, toOotleNetwork } from "../ootle";
+import type { NetworkId } from "../lib/tari";
 import { AlertTriangle, ChevronLeft, Download, Flame, Loader2, RefreshCw } from "lucide-react";
 import { WasmBurnBuilder } from "@chironbuilder/tari-l1-wasm";
 import { coinSymbol, networkLabel, estimateMaxSpend, selectInputs, submitViaMiddleware, broadcastBaseUrl } from "../lib/tari";
@@ -416,7 +417,7 @@ function stepIndex(rec: BurnRecord): number {
   }
 }
 
-function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | null): string {
+function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | null, l2Sym: string): string {
   if (!claimable && (rec.status === "mined" || rec.status === "claiming")) {
     return translate("burn.minedNotClaimable");
   }
@@ -436,8 +437,8 @@ function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | nul
       return translate("burn.claimingOotle");
     case "claimed":
       return rec.claimedElsewhere
-        ? translate("burn.claimedElsewhere", { amount: formatMicro(BigInt(rec.claimedMicro ?? rec.amountMicro)) })
-        : translate("burn.claimed", { amount: formatMicro(BigInt(rec.claimedMicro ?? "0")) });
+        ? translate("burn.claimedElsewhere", { amount: formatMicro(BigInt(rec.claimedMicro ?? rec.amountMicro)), symbol: l2Sym })
+        : translate("burn.claimed", { amount: formatMicro(BigInt(rec.claimedMicro ?? "0")), symbol: l2Sym });
     case "external":
       return rec.outputProof ? translate("burn.proofReady") : translate("burn.waitingMined");
     case "failed":
@@ -494,7 +495,7 @@ function BurnList() {
                 </div>
                 <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500">
                   {(rec.status === "broadcast" || rec.status === "claiming") && <Loader2 size={12} className="animate-spin" />}
-                  {statusText(rec, claimable, store.tipHeight)}
+                  {statusText(rec, claimable, store.tipHeight, l2SymbolFor(ootleNetworkFor(store.network)))}
                 </span>
               </div>
 
@@ -557,8 +558,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /**
  * The claim key for a burn to another Ootle account, from what the user typed: an Ootle address
- * (`otl_…`), whose owner public key is the account's claim key, or the bare 64-hex key itself. On
- * testnet the address must be for the Ootle network these burns are claimed on.
+ * (`otl_…`), whose owner public key is the account's claim key, or the bare 64-hex key itself. The
+ * address must be for the Ootle network that goes with this L1 (MainNet with MainNet, Esmeralda
+ * with every testnet), the one these burns are claimed on.
  */
 function resolveClaimKey(
   input: string,
@@ -570,7 +572,7 @@ function resolveClaimKey(
   if (!value.startsWith("otl")) return { key: null, fromAddress: false, error: "burn.addressInvalid" };
   try {
     const parsed = parseOotleAddress(value);
-    if (l1Network !== "mainnet" && parsed.network !== toOotleNetwork(OOTLE_NETWORK)) {
+    if (parsed.network !== toOotleNetwork(ootleNetworkFor(l1Network as NetworkId))) {
       return { key: null, fromAddress: true, error: "burn.addressWrongNetwork" };
     }
     const key = Array.from(parsed.owner_key as Uint8Array, (b) => b.toString(16).padStart(2, "0")).join("");

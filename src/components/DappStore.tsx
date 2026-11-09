@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DappFrame } from "./DappFrame";
 import { ExternalLink, Compass, Grid3x3, Plus, Search, Trash2, Check } from "lucide-react";
 import {
-  CATALOG,
+  catalogFor,
   type CatalogEntry,
   type Dapp,
   cachedArtwork,
@@ -16,6 +16,8 @@ import {
   saveDapps,
 } from "../lib/dapps";
 import { useToast } from "./toast";
+import { useStore } from "../store";
+import { ootleNetworkFor } from "../ootle";
 import { Badge, Button, EmptyState, Field, Segmented, TextInput, cn } from "./ui";
 import { t } from "../i18n";
 
@@ -29,6 +31,8 @@ type Tab = "installed" | "explore";
  */
 export function DappStore() {
   const toast = useToast();
+  const ootleNetwork = ootleNetworkFor(useStore().network);
+  const catalog = useMemo(() => catalogFor(ootleNetwork), [ootleNetwork]);
   const [tab, setTab] = useState<Tab>("installed");
   const [dapps, setDapps] = useState<Dapp[]>(() => loadDapps());
   const [query, setQuery] = useState("");
@@ -90,14 +94,14 @@ export function DappStore() {
 
   const catalogFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return CATALOG;
-    return CATALOG.filter(
+    if (!q) return catalog;
+    return catalog.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         hostOf(c.url).toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [catalog, query]);
 
   if (running) {
     return (
