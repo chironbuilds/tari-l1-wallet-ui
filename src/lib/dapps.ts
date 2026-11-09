@@ -1,3 +1,4 @@
+import type { NetworkName } from "../ootle";
 /**
  * Locally installed Ootle dApps.
  *
@@ -20,6 +21,16 @@ export interface Dapp {
 }
 
 /** A suggestion in the Explore tab. Not installed until the user says so. */
+/** Veil, the Ootle explorer, for `network`. */
+export function explorerUrl(network: NetworkName): string {
+  return network === "mainnet" ? "https://explorer.tari.mw" : "https://testnet-explorer.tari.mw";
+}
+
+/** The Explore list with the explorer entry pointing at the wallet's current network. */
+export function catalogFor(network: NetworkName): CatalogEntry[] {
+  return CATALOG.map((e) => (e.tag === "Explorer" ? { ...e, url: explorerUrl(network) } : e));
+}
+
 export interface CatalogEntry {
   url: string;
   name: string;
@@ -35,7 +46,7 @@ export interface CatalogEntry {
  */
 export const CATALOG: CatalogEntry[] = [
   {
-    url: "https://explorer.tari.mw",
+    url: explorerUrl("esmeralda"),
     name: "Ootle Explorer",
     description: "Browse Ootle substates, transactions and templates.",
     tag: "Explorer",

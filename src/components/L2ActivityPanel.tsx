@@ -1,7 +1,7 @@
 import { ArrowDownLeft, ArrowUpRight, ExternalLink, Eye, EyeOff, Flame, Grid3x3, History as HistoryIcon, Loader2, Lock, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "../store";
-import { formatResourceAmount } from "../ootle";
+import { formatResourceAmount, ootleNetworkFor } from "../ootle";
 import { timeAgo, truncMiddle } from "../lib/format";
 import { clearL2History, explorerTxUrl, useL2History, type L2Activity } from "../lib/l2history";
 import { useI18n, type TranslationKey } from "../i18n";
@@ -46,6 +46,7 @@ function KindIcon({ kind }: { kind: L2Activity["kind"] }) {
 /** One activity row. `compact` is the short form shown on the Ootle card. */
 export function L2ActivityRow({ e, compact = false }: { e: L2Activity; compact?: boolean }) {
   const { t } = useI18n();
+  const network = ootleNetworkFor(useStore().network);
   const amount =
     e.amount !== undefined && e.divisibility !== undefined
       ? `${formatResourceAmount(BigInt(e.amount), e.divisibility)} ${e.symbol ?? ""}`.trim()
@@ -71,7 +72,7 @@ export function L2ActivityRow({ e, compact = false }: { e: L2Activity; compact?:
         )}
         {!compact && e.transactionId && (
           <a
-            href={explorerTxUrl(e.transactionId)}
+            href={explorerTxUrl(e.transactionId, network)}
             target="_blank"
             rel="noreferrer"
             className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-semibold text-[#9d6bff] hover:underline"
@@ -91,7 +92,7 @@ export function L2ActivityRow({ e, compact = false }: { e: L2Activity; compact?:
           <Badge tone="red">{t("l2hist.failed")}</Badge>
         ) : compact && e.transactionId ? (
           <a
-            href={explorerTxUrl(e.transactionId)}
+            href={explorerTxUrl(e.transactionId, network)}
             target="_blank"
             rel="noreferrer"
             title={t("l2hist.viewOnExplorer")}
