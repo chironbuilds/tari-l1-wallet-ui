@@ -12,7 +12,7 @@ import type { NetworkId } from "./tari";
  * launches 2026-11-11). Until then a mainnet burn destroys real XTM with nothing verified to mint
  * it back, so mainnet stays behind the "not claimable yet" warning like any other unobserved L1.
  */
-export const MAINNET_BURN_CLAIMS_LIVE = false;
+export const MAINNET_BURN_CLAIMS_LIVE = true;
 
 /**
  * Whether a burn on `network` can be claimed today. A burn can only be claimed on the Ootle network
@@ -153,10 +153,13 @@ export const CLAIM_RETRY_MS = 3 * 60_000;
 
 /**
  * L1 blocks a burn must be buried under before Ootle validators can see it: they follow the L1 tip
- * at `base_layer_confirmations` (Esmeralda 100), plus a few for epoch rounding. Claiming earlier
- * only fails with "block header not found", so the wallet doesn't try.
+ * at `base_layer_confirmations` (tari-ootle consensus_constants.rs: Esmeralda 100, MainNet 780,
+ * about 26 hours at 2-minute blocks), plus a few for epoch rounding. Claiming earlier only fails
+ * with "block header not found", so the wallet doesn't try.
  */
-export const CLAIM_MIN_CONFIRMATIONS = 105;
+export function claimMinConfirmations(network: NetworkId | null): number {
+  return network === "mainnet" ? 785 : 105;
+}
 
 /** Confirmations a mined burn has, or null when its block or the tip isn't known. */
 export function burnConfirmations(rec: BurnRecord, tipHeight: number | null): number | null {

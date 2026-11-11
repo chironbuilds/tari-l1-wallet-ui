@@ -42,7 +42,7 @@ import {
   selectFastestNodeFor,
   setSelectedNodeId,
 } from "./lib/rpc";
-import { CLAIM_MIN_CONFIRMATIONS, burnClaimableNow, burnConfirmations, claimProofFor, claimRetryDelayMs, isRetryableClaimError, type BurnRecord } from "./lib/burn";
+import { burnClaimableNow, burnConfirmations, claimMinConfirmations, claimProofFor, claimRetryDelayMs, isRetryableClaimError, type BurnRecord } from "./lib/burn";
 import { hasPendingL2, logL2, receiptKnown, receiptsSeeded, recordReceipts, withL2Log } from "./lib/l2history";
 import type { ScannedStealthOutput } from "@chironbuilder/ootle-sdk";
 
@@ -1215,7 +1215,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rec.toOwnAccount &&
         burnClaimableNow(network) &&
         // Not before validators can see the block (unknown depth: fall back to the retry delay alone).
-        (burnConfirmations(rec, tipHeightRef.current) ?? CLAIM_MIN_CONFIRMATIONS) >= CLAIM_MIN_CONFIRMATIONS &&
+        (burnConfirmations(rec, tipHeightRef.current) ?? claimMinConfirmations(network)) >= claimMinConfirmations(network) &&
         Date.now() - (rec.lastAttemptAt ?? 0) >= claimRetryDelayMs(rec.autoAttempts ?? 0)
       ) {
         void claimBurn(rec.id, false);

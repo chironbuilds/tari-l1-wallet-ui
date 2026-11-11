@@ -8,7 +8,7 @@ import { coinSymbol, networkLabel, estimateMaxSpend, selectInputs, submitViaMidd
 import { fetchMiddlewareTip } from "../lib/scanner";
 import { downloadText, formatMicro, tariToMicro, tick, timeAgo, truncMiddle } from "../lib/format";
 import {
-  CLAIM_MIN_CONFIRMATIONS,
+  claimMinConfirmations,
   burnClaimableNow,
   burnConfirmations,
   claimProofFileText,
@@ -394,7 +394,7 @@ function Header() {
         </span>
         {t("burn.title")}
       </h2>
-      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{t("burn.intro")}</p>
+      <p className="mt-2 text-xs leading-relaxed text-zinc-500">{t("burn.intro", { wait: t(useStore().network === "mainnet" ? "burn.waitMainnet" : "burn.waitTestnet") })}</p>
     </div>
   );
 }
@@ -417,7 +417,7 @@ function stepIndex(rec: BurnRecord): number {
   }
 }
 
-function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | null, l2Sym: string): string {
+function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | null, l2Sym: string, minConfirmations: number): string {
   if (!claimable && (rec.status === "mined" || rec.status === "claiming")) {
     return translate("burn.minedNotClaimable");
   }
@@ -428,8 +428,8 @@ function statusText(rec: BurnRecord, claimable: boolean, tipHeight: number | nul
       if (!rec.toOwnAccount) return translate("burn.mined");
       {
         const confirmations = burnConfirmations(rec, tipHeight);
-        if (confirmations !== null && confirmations < CLAIM_MIN_CONFIRMATIONS) {
-          return translate("burn.waitingConfirmationsCount", { n: confirmations, total: CLAIM_MIN_CONFIRMATIONS });
+        if (confirmations !== null && confirmations < minConfirmations) {
+          return translate("burn.waitingConfirmationsCount", { n: confirmations, total: minConfirmations });
         }
       }
       return isRetryableClaimError(rec.lastError ?? "") ? translate("burn.waitingObserve") : translate("burn.waitingConfirmations");
@@ -495,7 +495,7 @@ function BurnList() {
                 </div>
                 <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-zinc-500">
                   {(rec.status === "broadcast" || rec.status === "claiming") && <Loader2 size={12} className="animate-spin" />}
-                  {statusText(rec, claimable, store.tipHeight, l2SymbolFor(ootleNetworkFor(store.network)))}
+                  {statusText(rec, claimable, store.tipHeight, l2SymbolFor(ootleNetworkFor(store.network)), claimMinConfirmations(store.network))}
                 </span>
               </div>
 
