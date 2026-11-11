@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>GGBP-1 v3 verifier-only check</title>
+<script type="module">
+  // Verifier-only diagnostics. No wallet, key, prover or network access is involved.
+  const out = { ua: navigator.userAgent, secureContext: window.isSecureContext };
+  try {
+    const m = await import("./pkg/ggbp1_v3_verifier.js");
+    await m.default();
+    out.exports = Object.keys(m).filter((k) => k !== "default" && k !== "initSync").sort();
+    const run = (name, fn) => { try { out[name] = fn(); } catch (e) { out[name] = "threw: " + (e && e.message || e); } };
+    run("positive", m.ggbp1_v3_verify_fixed_corpus);
+    run("negative", m.ggbp1_v3_rejects_negative_corpus);
+    run("randomness", m.ggbp1_v3_browser_secure_randomness_probe);
+  } catch (e) {
+    out.loadError = String(e && e.message || e);
+  }
+  window.__result = out;
+</script>
