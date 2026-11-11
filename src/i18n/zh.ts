@@ -216,6 +216,7 @@ const zh: Dictionary = {
     privateUpdated: "您的私密余额已更新。",
     noUnrecorded: "此账户没有未记录的屏蔽资金。",
     ootleL2: "Ootle L2",
+    mainnet: "主网",
     testnet: "测试网",
     revealedBalance: "公开余额",
     privateSuffix: "{amount} {symbol} 私密",

@@ -217,6 +217,7 @@ const en = {
     privateUpdated: "Your private balance has been updated.",
     noUnrecorded: "No unrecorded shielded funds on this account.",
     ootleL2: "Ootle L2",
+    mainnet: "mainnet",
     testnet: "testnet",
     revealedBalance: "Revealed balance",
     privateSuffix: "{amount} {symbol} private",

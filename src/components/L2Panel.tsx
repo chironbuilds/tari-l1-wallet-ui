@@ -17,9 +17,9 @@ import { L2ActivityRow } from "./L2ActivityPanel";
  * The Ootle (L2) view, laid out to mirror the L1 wallet column: balance card on top, holdings
  * beneath it.
  *
- * Reads from the same seed as the L1 side, so this is the same wallet one layer up — but Ootle
- * has no public MainNet indexer, so the account here lives on Esmeralda and every surface says
- * so. Test TARI must never be mistaken for the MainNet XTM on the L1 side.
+ * Reads from the same seed as the L1 side, so this is the same wallet one layer up. The Ootle
+ * network follows the L1 one (ootleNetworkFor): MainNet with MainNet, Esmeralda with any testnet,
+ * and the badge says which, so test TARI is never mistaken for real TARI.
  */
 export function L2Panel({
   onOpenPanel,
@@ -73,7 +73,7 @@ export function L2Panel({
             </span>
             <span className="text-sm font-bold">{t("l2.ootleL2")}</span>
             <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] font-bold tracking-wide uppercase opacity-90">
-              {t("l2.testnet")}
+              {t(store.network === "mainnet" ? "l2.mainnet" : "l2.testnet")}
             </span>
           </div>
           {identity && (
