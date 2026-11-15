@@ -90,6 +90,7 @@ p { margin: 0 0 16px; color: #9997a3; font-size: 14px; line-height: 1.45; }
   animation: tc-sweep 1.4s ease-in-out infinite; }
 .spinner { position: relative; z-index: 1; width: 44px; height: 44px; border-radius: 50%;
   border: 4px solid rgba(162, 89, 255, .22); border-top-color: #a259ff; animation: tc-spin .8s linear infinite; }
+.pending { display: flex; justify-content: center; padding: 6px 0 14px; }
 .btn.loading { opacity: .6; pointer-events: none; }
 .btn .mini { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; margin-right: 8px; border-radius: 50%;
   border: 2px solid rgba(18, 11, 24, .3); border-top-color: #120b18; animation: tc-spin .8s linear infinite; }
@@ -183,6 +184,62 @@ function openModal(): Modal {
   };
 }
 
+// ---------------- "check your phone" sheet ----------------
+// Shown while a request on an existing session waits for Sapient. Without it the page looks dead: the
+// picker has stepped aside and the approval is on another device -- or nowhere, if the app is closed or
+// the phone dropped the session. After a while it offers to pair again.
+const SLOW_MS = 700; // fast read-only calls answer before this and never flash the sheet
+const STALE_MS = 15000;
+
+interface Waiting {
+  close(): void;
+  /** Rejects with 4001 on Cancel; resolves when the user asks to pair again. */
+  outcome: Promise<"repair">;
+}
+
+function openWaiting(method: string): Waiting {
+  const host = document.createElement("div");
+  host.setAttribute("data-tari-walletconnect-waiting", "");
+  const root = host.attachShadow({ mode: "open" });
+  const what = method === "tari_requestAccounts" ? "the connection" : "the request";
+  root.innerHTML = `<style>${MODAL_CSS}</style>
+    <div class="backdrop">
+      <div class="card" role="dialog" aria-label="Check Sapient">
+        <div class="logo">${EYE_SVG}</div>
+        <h2>Check Sapient</h2>
+        <p>Approve ${what} in Sapient on your phone.</p>
+        <div class="pending"><div class="spinner"></div></div>
+        ${isPhone() ? '<a class="btn primary" id="open" href="sapient://wc">Open Sapient</a>' : ""}
+        <button type="button" id="repair" hidden>Pair again</button>
+        <button type="button" id="cancel">Cancel</button>
+        <div class="status" id="status"><span class="dots">Waiting for Sapient</span></div>
+      </div>
+    </div>`;
+  document.body.append(host);
+  let settle: { resolve: (v: "repair") => void; reject: (e: Error) => void } = { resolve: () => {}, reject: () => {} };
+  const outcome = new Promise<"repair">((resolve, reject) => (settle = { resolve, reject }));
+  outcome.catch(() => {});
+  const stale = setTimeout(() => {
+    root.getElementById("status")!.textContent = "Not hearing back. Is Sapient open? If you removed this site in Sapient, pair again.";
+    root.getElementById("repair")!.hidden = false;
+  }, STALE_MS);
+  const close = () => {
+    clearTimeout(stale);
+    host.remove();
+  };
+  root.getElementById("cancel")!.addEventListener("click", () => {
+    close();
+    const e = new Error("Request cancelled.") as Error & { code?: number };
+    e.code = 4001;
+    settle.reject(e);
+  });
+  root.getElementById("repair")!.addEventListener("click", () => {
+    close();
+    settle.resolve("repair");
+  });
+  return { close, outcome };
+}
+
 // ---------------- transport ----------------
 function create(config: Config) {
   if (!config || typeof config.projectId !== "string" || !config.projectId) {
@@ -243,6 +300,43 @@ function create(config: Config) {
     return connecting;
   }
 
+  // Sends one request; if it's slow, shows the "Check Sapient" sheet. "Pair again" drops the session
+  // (the phone may have forgotten it) and re-sends over a fresh pairing.
+  async function requestWithFeedback(method: string, params: unknown): Promise<unknown> {
+    const sent = provider!.request({ method, params: (params ?? {}) as object }, chain);
+    let waiting: Waiting | null = null;
+    const timer = setTimeout(() => (waiting = openWaiting(method)), SLOW_MS);
+    try {
+      const shown = new Promise<"repair">((resolve, reject) => {
+        const poll = setInterval(() => {
+          if (!waiting) return;
+          clearInterval(poll);
+          waiting.outcome.then(resolve, reject);
+        }, 100);
+        sent.finally(() => clearInterval(poll)).catch(() => {});
+      });
+      const first = await Promise.race([sent.then((r) => ({ r })), shown]);
+      if (first !== "repair") return first.r;
+    } finally {
+      clearTimeout(timer);
+      (waiting as Waiting | null)?.close();
+    }
+    try {
+      await provider!.disconnect();
+    } catch {
+      /* the relay may not reach the phone */
+    }
+    // If the relay call failed, still forget the session locally so connect() shows a fresh QR.
+    const stale = provider!.session;
+    if (stale) {
+      await provider!.client.session.delete(stale.topic, { code: 6000, message: "User asked to pair again" }).catch(() => {});
+      provider!.session = undefined;
+    }
+    emit("disconnect", null);
+    await connect();
+    return requestWithFeedback(method, params);
+  }
+
   return {
     get connected() {
       return Boolean(provider?.session);
@@ -254,7 +348,7 @@ function create(config: Config) {
         return null;
       }
       await connect();
-      const result = await provider!.request({ method, params: (params ?? {}) as object }, chain);
+      const result = await requestWithFeedback(method, params);
       // An approved switch answers with the new network; follow it so the next call targets it.
       if (method === "tari_switchNetwork" && typeof result === "string" && NETWORKS.includes(result)) chain = `${NAMESPACE}:${result}`;
       return result;
