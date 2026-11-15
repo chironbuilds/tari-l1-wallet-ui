@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "server": "node server/index.js",
-    "server:local": "node server/index.js --bind 127.0.0.1 --host 127.0.0.1:18142 --tls 0"
+    "server:local": "node server/index.js --bind 127.0.0.1 --host 127.0.0.1:18142 --tls 0",
+    "build:connector-wc": "esbuild connector-wc/entry.ts --bundle --format=iife --minify --target=es2020 --platform=browser --define:process.env.NODE_ENV=\\\"production\\\" --define:global=globalThis --legal-comments=none --outfile=public/tari-connector-wc.js"
   },
   "dependencies": {
     "@chironbuilder/ootle-sdk": "^0.5.1",
@@ -45,7 +46,10 @@
     "@types/react-dom": "^19.1.0",
     "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@walletconnect/universal-provider": "^2.26.0",
+    "esbuild": "^0.25.12",
     "puppeteer-core": "^25.8.0",
+    "qrcode-generator": "^2.0.4",
     "tailwindcss": "^4.1.11",
     "typescript": "~5.8.3",
     "vite": "^7.0.0",

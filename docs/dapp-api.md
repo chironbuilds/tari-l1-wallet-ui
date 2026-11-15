@@ -16,6 +16,53 @@ to know which Tari wallet it drew. Feature-detect with `tari_getCapabilities`; n
 
 ---
 
+## Which wallet a page reaches
+
+| Where the page runs | `window.tari` | `window.tari.transport` |
+|---|---|---|
+| Inside Tari Universe (iframe) | Universe's bridge (wins even over an extension) | `"embedded"` |
+| A tab with the Sapient extension | The extension's provider (this script never displaces it) | — (the extension's object) |
+| A tab with neither, WalletConnect opted in | WalletConnect to **Sapient for Android** | `"walletconnect"` |
+| A tab with neither, no opt-in | A stub: every call rejects | `null` |
+
+`window.tari.isAvailable` is `true` when calls can reach a wallet (the first and third rows; the
+extension's own provider is always available). `window.tariUniverse` is always this script's object.
+
+## WalletConnect: Sapient for Android (optional)
+
+A dApp that opts in also works for users with no extension and outside Universe: they connect with
+the Sapient app on their phone. Set this **before** loading the connector:
+
+```html
+<script>
+  window.TARI_WALLETCONNECT = {
+    projectId: "<your Reown project id>",   // free at cloud.reown.com
+    network: "mainnet",                     // or "esmeralda"; Sapient refuses a different network
+    // metadata: { name, description, url, icons }   // optional; defaults from the page
+  };
+</script>
+<script src="https://universe.tari.mw/tari-connector.js"></script>
+```
+
+The first call (usually `requestAccounts`) loads `tari-connector-wc.js` (~160 KB gzipped, from the
+same origin) and shows a pairing dialog: a QR code on desktop (the user scans it from Sapient's
+Scan tab) or an **Open Sapient** button on a phone. Once the user approves in the app, every method,
+param and result is exactly as documented below — including `on("accountsChanged" | "networkChanged")`
+and a `disconnect` event when the session ends from either side. Cancelling the dialog rejects with
+code `4001`.
+
+- **Verified badge:** add your domain to your Reown project's allowed domains so Sapient shows the
+  site as *✓ Verified* instead of *Unverified* on every approval.
+- **Network:** a request for a network the phone isn't on is refused; ask with `tari_switchNetwork`.
+- Without `TARI_WALLETCONNECT` nothing about the connector's behaviour changes.
+
+## Pinning
+
+`tari-connector.js` is the current version. `tari-connector.v1.js` is a frozen copy of the original
+(before WalletConnect and `isAvailable`), for a dApp that wants a script that never changes.
+
+---
+
 ## Permission model
 
 Three separate grants, asked for at different moments, because they are different questions:

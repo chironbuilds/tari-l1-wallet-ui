@@ -31,6 +31,20 @@
  *
  * Outside the wallet (opened directly in a tab) `window.tari.isAvailable` is false and every call
  * rejects, so a dApp can degrade rather than hang.
+ *
+ * Optional -- WalletConnect (Sapient for Android). A dApp that sets this *before* loading the script
+ * also works outside a wallet: the first call shows a QR code (desktop) or an "Open Sapient" button
+ * (phone), and once the user approves in the app every call goes over WalletConnect, unchanged:
+ *
+ *   <script>window.TARI_WALLETCONNECT = { projectId: "<your Reown project id>", network: "mainnet" };</script>
+ *   <script src="https://universe.tari.mw/tari-connector.js"></script>
+ *
+ * Without that setting nothing about this script's behaviour changes. A wallet that is present always
+ * wins: inside Universe the embedding wallet is used, and an installed extension keeps `window.tari`.
+ * `window.tari.transport` says which one you got: "embedded", "walletconnect" or null.
+ *
+ * This file is the current version. A frozen copy of the original is kept at tari-connector.v1.js
+ * for anyone who wants to pin it.
  */
 (function () {
   "use strict";
@@ -82,9 +96,67 @@
     }
   }
 
+  // Opt-in WalletConnect transport (see the header). Only outside a wallet, and only when the dApp
+  // asked for it; the add-on (tari-connector-wc.js, ~160 KB gzipped) is fetched from wherever this
+  // script came from, on the first call that needs it.
+  var WC_CONFIG = !embedded && window.TARI_WALLETCONNECT && typeof window.TARI_WALLETCONNECT === "object" ? window.TARI_WALLETCONNECT : null;
+  var SCRIPT_BASE = (function () {
+    try {
+      return new URL(".", (document.currentScript && document.currentScript.src) || window.location.href).href;
+    } catch (e) {
+      return "https://universe.tari.mw/";
+    }
+  })();
+  var wcTransport = null;
+
   var pending = Object.create(null);
   var counter = 0;
   var listeners = Object.create(null);
+
+  function emit(event, data) {
+    var handlers = listeners[event] || [];
+    for (var i = 0; i < handlers.length; i++) {
+      try {
+        handlers[i](data);
+      } catch (e) {
+        /* a dApp listener that throws must not break the bridge */
+      }
+    }
+  }
+
+  function loadWalletConnect() {
+    if (wcTransport) return wcTransport;
+    wcTransport = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = SCRIPT_BASE + "tari-connector-wc.js";
+      s.async = true;
+      s.onload = function () {
+        try {
+          var t = window.__tariConnectorWC.create(WC_CONFIG);
+          ["accountsChanged", "networkChanged", "disconnect"].forEach(function (name) {
+            t.on(name, function (data) { emit(name, data); });
+          });
+          resolve(t);
+        } catch (e) {
+          reject(e);
+        }
+      };
+      s.onerror = function () {
+        wcTransport = null;
+        reject(new Error("Tari wallet unavailable: couldn't load the WalletConnect add-on"));
+      };
+      document.head.appendChild(s);
+    });
+    return wcTransport;
+  }
+
+  /** WalletConnect errors arrive as plain { code, message } objects: hand dApps a real Error. */
+  function asError(e) {
+    if (e instanceof Error) return e;
+    var err = new Error((e && e.message) || "Request failed");
+    if (e && e.code != null) err.code = e.code;
+    return err;
+  }
 
   function nextId() {
     counter += 1;
@@ -92,6 +164,11 @@
   }
 
   function request(method, params) {
+    if (!embedded && WC_CONFIG) {
+      return loadWalletConnect()
+        .then(function (t) { return t.request(method, params || {}); })
+        .catch(function (e) { throw asError(e); });
+    }
     if (!embedded) {
       return Promise.reject(
         new Error(
@@ -118,14 +195,7 @@
     if (event.source !== window.parent || event.origin !== parentOrigin) return;
 
     if (data.event) {
-      var handlers = listeners[data.event] || [];
-      for (var i = 0; i < handlers.length; i++) {
-        try {
-          handlers[i](data.data);
-        } catch (e) {
-          /* a dApp listener that throws must not break the bridge */
-        }
-      }
+      emit(data.event, data.data);
       return;
     }
 
@@ -153,7 +223,13 @@
     isTariWallet: true,
     /** Extra, and safe to ignore: true only when running inside a wallet's iframe. */
     isEmbedded: embedded,
-    info: { name: "Tari Universe", rdns: "mw.tari.universe", embedded: true },
+    /** True when calls can reach a wallet: embedded in one, or WalletConnect enabled (see header). */
+    isAvailable: embedded || !!WC_CONFIG,
+    /** "embedded" (inside Universe), "walletconnect" (opted in, outside a wallet), or null. */
+    transport: embedded ? "embedded" : WC_CONFIG ? "walletconnect" : null,
+    info: WC_CONFIG
+      ? { name: "Sapient (WalletConnect)", rdns: "mw.tari.sapient", embedded: false }
+      : { name: "Tari Universe", rdns: "mw.tari.universe", embedded: true },
 
     request: function (args) {
       return request((args && args.method) || "", (args && args.params) || {});
@@ -335,7 +411,8 @@
      * request id survives that and this promise does not.
      */
     requestTransaction: function (operation, pollIntervalMs) {
-      var interval = pollIntervalMs || 500;
+      // Each poll is a relay round trip over WalletConnect: poll less often there.
+      var interval = pollIntervalMs || (WC_CONFIG ? 1500 : 500);
       return request("tari_createTransactionRequest", operation).then(function (created) {
         return new Promise(function (resolve, reject) {
           (function poll() {
