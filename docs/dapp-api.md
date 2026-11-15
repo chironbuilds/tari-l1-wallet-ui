@@ -56,6 +56,36 @@ code `4001`.
 - **Network:** a request for a network the phone isn't on is refused; ask with `tari_switchNetwork`.
 - Without `TARI_WALLETCONNECT` nothing about the connector's behaviour changes.
 
+## Wallet picker (optional UI)
+
+`tari-connect.js` (4 KB gzipped) adds a ready-made **Connect wallet** dialog that lists the wallets a
+user can use from this page and returns the chosen one's provider:
+
+| Option | Shown when | On choose |
+|---|---|---|
+| Sapient extension | Always on desktop: *Detected* if installed, otherwise *Install* (Chrome Web Store) | The extension's approval popup |
+| Sapient for Android | The dApp set `TARI_WALLETCONNECT` | QR (desktop) / Open Sapient (phone) |
+| Tari Universe | The page runs inside Universe | Used directly; no dialog |
+
+```html
+<script src="https://universe.tari.mw/tari-connector.js"></script>
+<script src="https://universe.tari.mw/tari-connect.js"></script>
+
+<tari-connect-button></tari-connect-button>   <!-- "Connect wallet", then the connected address -->
+<script>
+  document.querySelector("tari-connect-button").addEventListener("tari-connect", async (e) => {
+    const { wallet, provider, accounts } = e.detail;   // wallet: "sapient-extension" | "sapient-mobile" | "tari-universe"
+    const balances = await provider.request({ method: "tari_getBalances" });
+  });
+</script>
+```
+
+Or call it yourself: `const { provider, accounts } = await TariConnect.open({ theme: "dark" | "light" })`
+(rejects with code `4001` if the user closes it). `TariConnect.discover()` returns the options without
+showing anything; `TariConnect.connection()` and `TariConnect.disconnect()` manage the current one.
+The dialog remembers the last wallet used, becomes a bottom sheet on phones, and lives in a Shadow
+DOM so it neither inherits nor leaks the dApp's CSS. The button takes `label` and `theme` attributes.
+
 ## Pinning
 
 `tari-connector.js` is the current version. `tari-connector.v1.js` is a frozen copy of the original
