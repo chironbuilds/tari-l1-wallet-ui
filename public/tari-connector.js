@@ -128,7 +128,7 @@
     if (wcTransport) return wcTransport;
     wcTransport = new Promise(function (resolve, reject) {
       var s = document.createElement("script");
-      s.src = SCRIPT_BASE + "tari-connector-wc.js";
+      s.src = SCRIPT_BASE + "tari-connector-wc.js?v=2";
       s.async = true;
       s.onload = function () {
         try {

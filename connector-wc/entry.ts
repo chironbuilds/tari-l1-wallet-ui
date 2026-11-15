@@ -78,10 +78,33 @@ h2 { margin: 0 0 6px; font-size: 19px; }
 p { margin: 0 0 16px; color: #9997a3; font-size: 14px; line-height: 1.45; }
 .qr { background: #fff; border-radius: 16px; padding: 12px; width: 236px; height: 236px; margin: 0 auto 16px; }
 .qr svg { width: 100%; height: 100%; display: block; }
+/* Until the relay hands back a pairing link: a scanning shimmer over a QR-ish placeholder. */
+.qr.loading { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: #f4eff8; }
+.qr.loading::before { content: ""; position: absolute; inset: 18px; border-radius: 10px; opacity: .5;
+  background: repeating-linear-gradient(90deg, #ddd2e6 0 14px, transparent 14px 22px),
+              repeating-linear-gradient(0deg, #ddd2e6 0 14px, transparent 14px 22px);
+  -webkit-mask: linear-gradient(#000 0 0); }
+.qr.loading::after { content: ""; position: absolute; left: 0; right: 0; height: 40%; top: -40%;
+  background: linear-gradient(180deg, transparent, rgba(162, 89, 255, .28), transparent);
+  animation: tc-sweep 1.4s ease-in-out infinite; }
+.spinner { position: relative; z-index: 1; width: 44px; height: 44px; border-radius: 50%;
+  border: 4px solid rgba(162, 89, 255, .22); border-top-color: #a259ff; animation: tc-spin .8s linear infinite; }
+.btn.loading { opacity: .6; pointer-events: none; }
+.btn .mini { display: inline-block; vertical-align: -3px; width: 16px; height: 16px; margin-right: 8px; border-radius: 50%;
+  border: 2px solid rgba(18, 11, 24, .3); border-top-color: #120b18; animation: tc-spin .8s linear infinite; }
+.dots::after { content: ""; animation: tc-dots 1.2s steps(4, end) infinite; }
+@keyframes tc-spin { to { transform: rotate(360deg); } }
+@keyframes tc-sweep { to { top: 100%; } }
+@keyframes tc-dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+@media (prefers-reduced-motion: reduce) {
+  .qr.loading::after, .dots::after { animation: none; }
+  .spinner, .btn .mini { animation-duration: 2.4s; }
+}
 button, a.btn { display: block; box-sizing: border-box; width: 100%; min-height: 46px; margin: 8px 0 0; border-radius: 12px;
-  border: 1px solid #2c2338; background: #211a2b; color: #f2f2f6; font: 600 15px inherit; cursor: pointer;
+  border: 1px solid #2c2338; background: #211a2b; color: #f2f2f6; font-family: inherit; font-weight: 600; font-size: 15px; cursor: pointer;
   text-decoration: none; line-height: 46px; padding: 0 12px; }
-.primary { background: linear-gradient(135deg, #fc72ff, #a259ff); border: 0; color: #120b18; }
+a.btn.primary, button.primary { background: linear-gradient(135deg, #fc72ff, #a259ff); border: 0; color: #120b18; }
 .status { margin-top: 10px; font-size: 13px; color: #9997a3; min-height: 18px; }
 `;
 
@@ -104,11 +127,11 @@ function openModal(): Modal {
         <div class="logo">${EYE_SVG}</div>
         <h2>Connect with Sapient</h2>
         <p>${isPhone() ? "Open the Sapient app to connect this site to your wallet." : "Scan this code with Sapient on your phone: Scan tab, then point the camera."}</p>
-        ${isPhone() ? "" : '<div class="qr" id="qr"></div>'}
-        ${isPhone() ? '<a class="btn primary" id="open" href="#">Open Sapient</a>' : ""}
+        ${isPhone() ? "" : '<div class="qr loading" id="qr" aria-busy="true" aria-label="Generating QR code"><div class="spinner"></div></div>'}
+        ${isPhone() ? '<a class="btn primary loading" id="open" href="#" aria-disabled="true"><span class="mini"></span>Preparing…</a>' : ""}
         <button type="button" id="copy">Copy link</button>
         <button type="button" id="cancel">Cancel</button>
-        <div class="status" id="status">Preparing a secure connection…</div>
+        <div class="status" id="status"><span class="dots">Preparing a secure connection</span></div>
       </div>
     </div>`;
   document.body.append(host);
@@ -141,10 +164,18 @@ function openModal(): Modal {
         const q = qrcode(0, "M");
         q.addData(value);
         q.make();
+        qrEl.classList.remove("loading");
+        qrEl.removeAttribute("aria-busy");
+        qrEl.setAttribute("aria-label", "WalletConnect QR code");
         qrEl.innerHTML = q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
       }
       const open = root.getElementById("open") as HTMLAnchorElement | null;
-      if (open) open.href = sapientDeepLink(value);
+      if (open) {
+        open.href = sapientDeepLink(value);
+        open.classList.remove("loading");
+        open.removeAttribute("aria-disabled");
+        open.textContent = "Open Sapient";
+      }
       root.getElementById("status")!.textContent = "Waiting for you to approve in Sapient…";
     },
     close,
