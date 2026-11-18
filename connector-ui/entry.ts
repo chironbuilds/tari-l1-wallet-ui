@@ -209,7 +209,7 @@ export function open(options: OpenOptions = {}): Promise<ConnectResult> {
         <p class="sub">Choose how to connect to this app. Your keys stay in your wallet.</p>
         <div class="list">${rows}</div>
         <div class="err" hidden></div>
-        <div class="foot">Self-custody Tari wallets · <a href="https://tari.com" target="_blank" rel="noopener">tari.com</a></div>
+        <div class="foot">Download Sapient at <a href="https://sapient.tari.mw" target="_blank" rel="noopener">sapient.tari.mw</a></div>
       </div></div>`;
     document.body.append(host);
     const err = root.querySelector<HTMLElement>(".err")!;
