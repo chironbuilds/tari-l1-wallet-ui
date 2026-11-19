@@ -57,6 +57,8 @@ const result = await window.tari.request({ method: "tari_…", params: { … } }
 | `tari_submitTransactionRequest` | `{ requestId }` | the operation's result. Throws unless `status === "approved"`. |
 | `tari_signOwnershipChallenge` | `{ resourceAddress, substateId, challenge }` | `{ publicKey, publicNonce, signature }` (hex). **Prompts.** Proves control of one output — see "Ownership proofs" below. |
 | `tari_signWalletOwnershipChallenge` | `{ challenge }` | `{ walletAddress, publicNonce, signature }` (hex). **Prompts.** Proves control of the wallet address itself, not tied to any output. |
+| `tari_getBalanceProofSubject` | — | this wallet's per-site GGBP-1 subject key and challenge parameters. **Prompts.** Web wallet only — see "L1 balance proofs" below. |
+| `tari_requestBalanceProof` | `{ protocol: "ggbp1", version: 3, challenge }` | `{ protocol, version, response }` (base64url). **Prompts.** Web wallet only. |
 | `tari_disconnect` | — | `null`. Forgets your origin. |
 
 Prefer `tari_createTransactionRequest` over `tari_signAndSubmitTransaction` for anything new: the
@@ -369,6 +371,47 @@ wrong kind of claim. A verifier decodes the owner key from the address *they* al
 `capabilities.walletOwnershipProof`. The paylink reference dApp's "Prove you hold a wallet address" /
 "Check a wallet ownership proof" widgets are a working example of both sides.
 
+### L1 balance proofs (GGBP-1 v3) — experimental, Esmeralda only
+
+The web wallet (not Sapient, which answers `4200`) can prove it holds **at least** some amount of L1
+XTM without revealing the exact amount or moving anything: a GGBP-1 v3 aggregate-threshold proof
+over its own L1 outputs (a Bulletproofs+ range proof on their summed commitments, plus Schnorr
+signatures from each output's script key and a per-site subject key, all bound to your challenge).
+Check `capabilities.ggbp1BalanceProof`: `false`, or
+`{ protocolVersion: 3, network: "esmeralda", maxOutputs: 16, maxProofBytes: 8192 }`.
+
+```js
+// 1. Once per user: this wallet's subject key for your site (the user approves).
+const subject = await window.tari.getBalanceProofSubject();
+// { protocol: "ggbp1", version: 3, network, genesisHash, originHash,
+//   subjectPublicKey, commitmentGeneratorFingerprint }  (hex)
+
+// 2. Your server issues a 223-byte challenge, sent as unpadded base64url:
+//    "GGBP1" ‖ 0x03 ‖ network(1) ‖ genesisHash ‖ originHash ‖ gate_id(16) ‖ le64(gate_config_version)
+//    ‖ subject_id(16) ‖ subjectPublicKey ‖ le64(threshold µT) ‖ nonce(32) ‖ le64(expires_at_unix)
+//    ‖ commitmentGeneratorFingerprint
+
+// 3. The wallet shows the user exactly which outputs it will disclose.
+const { response } = await window.tari.requestBalanceProof(challenge);
+
+// 4. Server side: parse the GGBP1R v3 response, compare every challenge field byte for byte with
+//    what you issued, run the v3 verifier, then check each disclosed output on chain.
+```
+
+- **It proves the cryptography, not that the money is still there.** Outputs can be spent right
+  after, and the verifier can't tell a real output from a made-up one. Check every disclosed output
+  hash on chain (exists, unspent) and revalidate before relying on it again.
+- **It is not anonymous.** The response names the outputs' hashes and commitments: they can be found
+  on chain and linked together. The exact amounts stay hidden.
+- `originHash = SHA-256("GGBP1/origin" ‖ origin)` for your page's exact origin (`https://host[:port]`).
+  A challenge for another origin, network or subject key, or an expired one, is refused with `-32603`.
+- Declining and "can't reach the threshold" both reject with `4001`, so balances can't be probed;
+  the wallet also allows one open request per site and 10 per hour.
+- Thresholds come from your server, never from page input. GGBP-1 v2 is unsafe and never produced.
+
+Full encodings, the subject-key derivation and the wallet's checks:
+`docs/ggbp1/WALLET_INTEGRATION.md` in chironbuilds/tari-l1-wallet-ui.
+
 ## Resource types — what "private" means depends on the resource
 
 `ResourceType` (`Fungible | NonFungible | Confidential | Stealth`) is a property of the resource
@@ -436,6 +479,9 @@ interface WalletCapabilities {
   transactionRequests: boolean;      // the create/get/submit request trio
   walletAddress: boolean;            // tari_getWalletAddress
   dryRunIsLocal: boolean;            // dry runs never leave the wallet
+  ggbp1BalanceProof:                 // GGBP-1 v3 L1 balance proofs (web wallet, Esmeralda)
+    | false
+    | { protocolVersion: 3; network: "esmeralda"; maxOutputs: 16; maxProofBytes: 8192 };
 }
 ```
 

@@ -33,6 +33,8 @@ export type TariMethod =
   | "tari_claimPrivatePayment"
   | "tari_signOwnershipChallenge"
   | "tari_signWalletOwnershipChallenge"
+  | "tari_getBalanceProofSubject"
+  | "tari_requestBalanceProof"
   | "tari_disconnect";
 
 /** Raw units. Divide by `10 ** divisibility` to display — never assume 6. */
@@ -72,6 +74,8 @@ export interface TariWalletCapabilities {
   transactionRequests: boolean;
   walletAddress: boolean;
   dryRunIsLocal: boolean;
+  /** GGBP-1 v3 L1 balance proofs (web wallet only, experimental): the parameters, or false. */
+  ggbp1BalanceProof?: false | { protocolVersion: 3; network: string; maxOutputs: number; maxProofBytes: number };
 }
 
 export interface TariSignAndSubmitParams {
@@ -233,6 +237,29 @@ export interface TariWalletOwnershipProof {
   signature: string;
 }
 
+/** What a gate needs to issue a GGBP-1 v3 challenge to this wallet (hex fields). */
+export interface TariBalanceProofSubject {
+  protocol: "ggbp1";
+  version: 3;
+  network: string;
+  genesisHash: string;
+  /** SHA-256("GGBP1/origin" ‖ your page's origin). */
+  originHash: string;
+  /** This wallet's subject key for your site only. */
+  subjectPublicKey: string;
+  commitmentGeneratorFingerprint: string;
+}
+
+/**
+ * A GGBP1R v3 response (unpadded base64url). Proves the cryptography only: the gate must still check
+ * on chain that each disclosed output exists and is unspent.
+ */
+export interface TariBalanceProof {
+  protocol: "ggbp1";
+  version: 3;
+  response: string;
+}
+
 /** 4001 rejected · 4100 not connected · 4200 unsupported · -32603 internal. */
 export interface TariProviderError extends Error {
   code?: number;
@@ -276,6 +303,12 @@ export interface TariProvider {
   request(args: { method: "tari_claimPrivatePayment"; params: { resourceAddress: string; commitment: string } }): Promise<{ amount: string; memo?: string }>;
   request(args: { method: "tari_signOwnershipChallenge"; params: { resourceAddress: string; substateId: string; challenge: string } }): Promise<TariOwnershipProof>;
   request(args: { method: "tari_signWalletOwnershipChallenge"; params: { challenge: string } }): Promise<TariWalletOwnershipProof>;
+  request(args: { method: "tari_getBalanceProofSubject" }): Promise<TariBalanceProofSubject>;
+  request(args: {
+    method: "tari_requestBalanceProof";
+    /** `challenge`: the gate's 223-byte challenge, unpadded base64url. */
+    params: { protocol: "ggbp1"; version: 3; challenge: string };
+  }): Promise<TariBalanceProof>;
   request(args: { method: "tari_disconnect" }): Promise<null>;
   request(args: { method: TariMethod; params?: unknown }): Promise<unknown>;
 

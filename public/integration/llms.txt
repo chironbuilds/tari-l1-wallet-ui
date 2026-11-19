@@ -58,6 +58,10 @@ const caps      = await window.tari.request({ method: "tari_getCapabilities" });
   spending it — see "Ownership proofs" below
 - tari_signWalletOwnershipChallenge — `{ challenge }` → `{ walletAddress, publicNonce, signature }`;
   prompts. Same idea, generic — proves control of the wallet address itself, no output involved
+- tari_getBalanceProofSubject — → `{ protocol, version, network, genesisHash, originHash,
+  subjectPublicKey, commitmentGeneratorFingerprint }`; prompts. Web wallet only (Sapient: 4200)
+- tari_requestBalanceProof — `{ protocol: "ggbp1", version: 3, challenge }` → `{ protocol, version,
+  response }`; prompts. GGBP-1 v3 L1 balance proof, web wallet only — see "L1 balance proofs" below
 - tari_disconnect — forgets this origin
 
 Both wallets implement the full list above — nothing here is Sapient-only or Tari-Universe-only
@@ -83,6 +87,19 @@ https://universe.tari.mw/paylink.
 For a plain "prove you hold this address" check with no output involved, use
 `tari_signWalletOwnershipChallenge` instead — same challenge/response idea, verified against the
 owner key decoded from the address itself (`parseOotleAddress`, no network call).
+
+## L1 balance proofs (GGBP-1 v3, experimental, Esmeralda only)
+
+The web wallet can prove it holds at least N µT of L1 XTM without revealing the amount or moving
+anything. Check `capabilities.ggbp1BalanceProof` (false, or `{ protocolVersion: 3, network,
+maxOutputs: 16, maxProofBytes: 8192 }`). Flow: `getBalanceProofSubject()` once → your server issues
+a 223-byte challenge (`"GGBP1" ‖ 0x03 ‖ network ‖ genesisHash ‖ originHash ‖ gate_id(16) ‖
+le64(config_version) ‖ subject_id(16) ‖ subjectPublicKey ‖ le64(threshold) ‖ nonce(32) ‖
+le64(expires_at) ‖ commitmentGeneratorFingerprint`, unpadded base64url) → `requestBalanceProof(challenge)`
+→ server verifies the GGBP1R v3 response AND checks each disclosed output on chain (the proof does
+not show they are unspent). Not anonymous: disclosed outputs are identifiable and linkable.
+`originHash = SHA-256("GGBP1/origin" ‖ origin)`. Declining and "can't reach the threshold" are both
+4001. Details: docs/ggbp1/WALLET_INTEGRATION.md in chironbuilds/tari-l1-wallet-ui.
 
 ## Resource types
 
