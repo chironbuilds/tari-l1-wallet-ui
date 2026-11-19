@@ -1,0 +1,103 @@
+# Tari dApp Wallet Integration
+
+> How a web dApp talks to a Tari wallet. One interface, `window.tari`, implemented by both the
+> Sapient browser extension and the Tari Universe web wallet (which runs dApps in an iframe).
+> A dApp never detects which wallet it has — it calls methods and feature-detects.
+
+Docs: https://universe.tari.mw/integration
+Full reference for LLMs: https://universe.tari.mw/integration/llms-full.txt
+Agent skill file: https://universe.tari.mw/integration/SKILL.md
+TypeScript types: https://universe.tari.mw/integration/tari-dapp.d.ts
+Connector script (only needed for iframe embedding): https://universe.tari.mw/tari-connector.js
+
+## The 30-second version
+
+```html
+<script src="https://universe.tari.mw/tari-connector.js"></script>
+```
+
+```js
+const [address] = await window.tari.request({ method: "tari_requestAccounts" });
+const balances  = await window.tari.request({ method: "tari_getBalances" });
+const caps      = await window.tari.request({ method: "tari_getCapabilities" });
+```
+
+## Methods
+
+- tari_requestAccounts — prompts the user; returns `string[]` of account component addresses
+- tari_getAccounts — returns `string[]`, empty when not connected (never prompts)
+- tari_getNetwork — returns the network name; answerable without a connection
+- tari_getWalletAddress — the connected account's bech32m wallet address (`otl_…`); address a private/stealth output to this, never to the component address
+- tari_getBalances — returns `TokenBalance[]`; empty when not connected
+- tari_getCapabilities — returns `WalletCapabilities`; use this instead of detecting the wallet
+- tari_getSubstate — `{ substateId, version? }`
+- tari_getTransactionResult — `{ transactionId }`
+- tari_signAndSubmitTransaction — `{ instructions, maxFee?, inputs?, dryRun? }`; prompts unless `dryRun`
+- tari_createTransactionRequest / tari_getTransactionRequest / tari_submitTransactionRequest — the
+  create→approve→submit trio; preferred over the single-call method above. Also how you ask for a
+  private spend (`kind: "shield" | "unshield" | "sendPrivately" | "withdrawStealthAndExecute" |
+  "redeemStealthOutputAndExecute" | "redeemStealthOutputWithPrivateFee" | "htlcFund" | "htlcClaim" |
+  "htlcRefund"`) — you cannot hand-build a stealth transfer yourself.
+  `withdrawStealthAndExecute`/`redeemStealthOutputAndExecute` reveal stealth value onto the
+  workspace as a `Bucket` (id `0`) and run your own `followUpInstructions` against it — the former
+  from the wallet's own tracked balance (you give an `amount`), the latter for one *specific*
+  stealth output someone else sent you (you give its `commitmentHex` and actual `revealedAmount`)
+  — see the full docs for the workspace-id convention. `redeemStealthOutputWithPrivateFee` is
+  `redeemStealthOutputAndExecute` with the fee ALSO paid from a stealth UTXO instead of the
+  wallet's revealed balance — required whenever the follow-up call itself carries something that
+  would deanonymize the wallet if the fee input did (a voting ballot's ranking, say); confirmed
+  live to leave no trace of the wallet's account address in the resulting transaction.
+- tari_requestViewAccess / tari_getViewAccess / tari_revokeViewAccess, tari_getPrivateBalances,
+  tari_getShieldedOutputs, tari_scanForPrivatePayments, tari_scanForResourceUtxos,
+  tari_claimPrivatePayment — read-only access to private balances; a separate grant from connecting,
+  never authorizes a spend. `tari_scanForResourceUtxos` is the one to reach for when a resource is
+  minted by a template's own custom logic rather than a native `StealthTransfer` (a voting ballot,
+  say) — `tari_scanForPrivatePayments` can never find those.
+- tari_signOwnershipChallenge — `{ resourceAddress, substateId, challenge }` → `{ publicKey,
+  publicNonce, signature }`; prompts. Proves control of one stealth output right now, without
+  spending it — see "Ownership proofs" below
+- tari_signWalletOwnershipChallenge — `{ challenge }` → `{ walletAddress, publicNonce, signature }`;
+  prompts. Same idea, generic — proves control of the wallet address itself, no output involved
+- tari_disconnect — forgets this origin
+
+Both wallets implement the full list above — nothing here is Sapient-only or Tari-Universe-only
+today. Still feature-detect with `tari_getCapabilities`, because *accounts* can differ (a
+daemon-relayed account has no view secret and can't do private spends or reads).
+
+## Proof of funds, in one line
+
+`shield` / `sendPrivately` accept `minimumValuePromise`: a public, permanent, non-interactively
+verifiable "this output is worth at least X" claim baked into the output's own range proof. See
+llms-full.txt's "Private spends & proof of funds" section for the full mechanics and a worked
+example — it's the answer if you're building anything like a proof-of-funds link.
+
+## Ownership proofs
+
+A `minimumValuePromise` link is a bearer artifact — it proves an output exists and is unspent, not
+who is showing it to you. To check that too, have the *verifier* generate a fresh challenge and ask
+`tari_signOwnershipChallenge` to sign it, then check the response against the substate's own
+on-chain `auth.Key` (never against a public key the other party self-reports). See llms-full.txt's
+"Ownership proofs" section, or the working reference implementation at
+https://universe.tari.mw/paylink.
+
+For a plain "prove you hold this address" check with no output involved, use
+`tari_signWalletOwnershipChallenge` instead — same challenge/response idea, verified against the
+owner key decoded from the address itself (`parseOotleAddress`, no network call).
+
+## Resource types
+
+`shield`/`sendPrivately`/`minimumValuePromise` work for any `Stealth`-type resource, not just XTR —
+`ResourceType` (Fungible/NonFungible/Confidential/Stealth) is fixed per-resource at creation, not a
+wallet choice. Fungible balances and NFT holdings are plain public on-chain data — no wallet call
+needed, just derive the component address from the wallet address and query the indexer's vaults
+(see the paylink dApp's "Look up public holdings"). Confidential is a different, closed mechanism
+(ElGamal-encrypted to a resource-specific view key) with no public floor-proof equivalent — see
+llms-full.txt's "Resource types" section for the full breakdown.
+
+## Rules that matter
+
+- Never branch on which wallet is present. Call `tari_getCapabilities` and branch on the answer.
+- Errors carry a `code`: 4001 user rejected, 4100 not connected, 4200 method unsupported, -32603 internal.
+- `dryRun: true` never prompts — use it for quotes and previews.
+- Amounts are raw integer units; divide by `10 ** divisibility` for display.
+- A stealth transfer needs the wallet's own signer — never assemble one as a raw `instructions` call.

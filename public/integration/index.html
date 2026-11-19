@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tari dApp Integration</title>
+<meta name="description" content="Connect a web dApp to every Tari Ootle wallet (Sapient extension, Sapient for Android, Tari Universe) through one window.tari interface.">
+<link rel="icon" href="/tari-favicon.svg">
+<style>
+:root{--bg:#0b0d10;--panel:#14171c;--panel2:#181c22;--line:rgba(255,255,255,.10);--tx:#eef1f5;--dim:#98a2b3;
+--teal:#35c9b0;--gold:#e4b979;--violet:#9d6bff;--pink:#fc72ff;--mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.65 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+.layout{max-width:1180px;margin:0 auto;padding:0 16px;display:grid;grid-template-columns:minmax(0,1fr)}
+@media (min-width:1060px){.layout{grid-template-columns:220px minmax(0,1fr);gap:48px;padding:0 28px}}
+nav.toc{display:none}
+@media (min-width:1060px){nav.toc{display:block;position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:56px 0 40px}}
+.toc b{display:block;font:600 11px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+.toc a{display:block;color:var(--dim);text-decoration:none;font-size:13.5px;padding:5px 10px;border-left:2px solid transparent;margin-left:-2px}
+.toc a:hover{color:var(--tx)}
+.toc a.on{color:var(--tx);border-left-color:var(--teal)}
+.toc a.new::after{content:"new";margin-left:6px;font:700 9.5px/1 var(--mono);color:var(--pink);vertical-align:1px;letter-spacing:.06em;text-transform:uppercase}
+main{min-width:0;max-width:860px;padding:56px 0 96px}
+h1{font-size:clamp(2rem,5vw,2.7rem);line-height:1.08;margin:0 0 14px;letter-spacing:-.03em}
+h1 em{font-style:normal;background:linear-gradient(90deg,var(--teal),var(--violet) 60%,var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:1.4rem;margin:64px 0 12px;letter-spacing:-.015em}
+h2 .n{font:600 12px/1 var(--mono);color:var(--violet);margin-right:10px;vertical-align:3px}
+h3{font-size:1rem;margin:28px 0 8px;color:var(--teal)}
+p{color:var(--dim)}p strong,li strong,td strong{color:var(--tx)}
+a{color:var(--teal)}
+.lede{font-size:1.08rem;color:#c3cbd6;max-width:64ch}
+.tag{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+color:var(--violet);border:1px solid rgba(157,107,255,.35);background:rgba(157,107,255,.10);
+padding:6px 10px;border-radius:999px;margin-bottom:18px}
+pre{position:relative;background:#0e1115;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;
+font:13px/1.6 var(--mono);color:#d8e0ea;margin:12px 0}
+pre .c{color:#6b7684}pre .s{color:#9fd8a8}pre .k{color:#c3a6ff}pre .t{color:#7cc7ff}
+code{font:13px/1.5 var(--mono);color:var(--gold)}
+pre code{color:inherit;font-size:13px}
+.copy{position:absolute;top:8px;right:8px;font:600 11px/1 var(--mono);color:var(--dim);background:var(--panel2);
+border:1px solid var(--line);border-radius:7px;padding:6px 8px;cursor:pointer;opacity:0;transition:opacity .15s}
+pre:hover .copy,.copy:focus-visible{opacity:1}
+@media (hover:none){.copy{opacity:1}}
+.copy.done{color:var(--teal)}
+table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;display:block;overflow-x:auto}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--dim);font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+td code{white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:18px 0}
+.grid .card{margin:0}
+.grid .card b{display:block;margin-bottom:4px}
+.grid .card span{color:var(--dim);font-size:13.5px}
+.wallets{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:26px 0 8px}
+.wallet{position:relative;background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:18px}
+.wallet .ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:12px}
+.wallet .ic.ext{background:linear-gradient(135deg,#fc72ff,#a259ff)}
+.wallet .ic.phone{background:linear-gradient(135deg,#a259ff,#35c9b0)}
+.wallet .ic.uni{background:#000;border:1px solid var(--line)}
+.wallet b{display:block;font-size:15.5px}
+.wallet span{display:block;color:var(--dim);font-size:13.5px;margin-top:4px}
+.wallet .via{display:inline-block;margin-top:10px;font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--teal);
+border:1px solid rgba(53,201,176,.3);border-radius:999px;padding:5px 8px}
+.wallet .badge{position:absolute;top:14px;right:14px;font:700 10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#120b18;
+background:linear-gradient(135deg,var(--pink),var(--violet));padding:5px 7px;border-radius:999px}
+.tabs{margin:18px 0}
+.tablist{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:4px}
+.tablist button{all:unset;cursor:pointer;padding:9px 12px;font-size:13.5px;font-weight:600;color:var(--dim);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tablist button[aria-selected="true"]{color:var(--tx);border-bottom-color:var(--violet)}
+.tablist button:focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:6px}
+.tabs:not(.js) .tablist{display:none}
+.tabs:not(.js) .panel::before{content:attr(data-label);display:block;font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--violet);margin:22px 0 4px}
+.tabs.js .panel[hidden]{display:none}
+.steps{counter-reset:s;list-style:none;padding:0;margin:16px 0}
+.steps>li{counter-increment:s;position:relative;padding:2px 0 14px 44px;margin:0;color:var(--dim)}
+.steps>li::before{content:counter(s);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+font:700 13px/1 var(--mono);color:var(--tx);background:rgba(157,107,255,.18);border:1px solid rgba(157,107,255,.4)}
+.steps>li>b{color:var(--tx)}
+.diagram{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin:18px 0}
+.diagram svg{display:block;width:100%;height:auto}
+.flow{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin:16px 0}
+.flow div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:13.5px;color:var(--dim)}
+.flow div b{display:block;color:var(--tx);font-size:14px;margin-bottom:3px}
+.warn{border-left:3px solid var(--gold);background:rgba(228,185,121,.07)}
+.note{border-left:3px solid var(--teal);background:rgba(53,201,176,.06)}
+.hr{height:1px;background:var(--line);margin:56px 0}
+ul{color:var(--dim);padding-left:20px}li{margin:7px 0}
+footer{color:#6b7480;font-size:13px;margin-top:64px;border-top:1px solid var(--line);padding-top:18px}
+</style></head><body>
+<div class="layout">
+<nav class="toc" aria-label="On this page">
+  <b>On this page</b>
+  <a href="#wallets">The wallets</a>
+  <a href="#quickstart" class="new">Quick start</a>
+  <a href="#how">How it connects</a>
+  <a href="#walletconnect" class="new">Sapient for Android</a>
+  <a href="#picker" class="new">Wallet picker</a>
+  <a href="#methods">Methods</a>
+  <a href="#capabilities">Feature-detect</a>
+  <a href="#private">Private spends</a>
+  <a href="#ownership">Ownership proofs</a>
+  <a href="#balance-proof" class="new">L1 balance proofs</a>
+  <a href="#resources">Resource types</a>
+  <a href="#quotes">Free quotes</a>
+  <a href="#events">Events</a>
+  <a href="#errors">Errors</a>
+  <a href="#embedding">Being embeddable</a>
+  <a href="#pitfalls">Pitfalls</a>
+</nav>
+<main>
+
+<span class="tag">dApp integration</span>
+<h1>One interface,<br><em>every Tari wallet.</em></h1>
+<p class="lede">Your dApp talks to a Tari Ootle wallet through <code>window.tari</code>. The same calls reach
+the Sapient browser extension, <strong>Sapient for Android</strong> over WalletConnect, and the Tari Universe
+web wallet. You never detect which wallet you have: you call methods and feature-detect what they support.</p>
+
+<div class="grid">
+  <div class="card"><b>For your agent</b><span><a href="/integration/SKILL.md">SKILL.md</a> · <a href="/integration/llms.txt">llms.txt</a> · <a href="/integration/llms-full.txt">llms-full.txt</a></span></div>
+  <div class="card"><b>For your editor</b><span><a href="/integration/tari-dapp.d.ts">tari-dapp.d.ts</a>: typed <code>request()</code> overloads, picker types</span></div>
+  <div class="card"><b>See it working</b><span><a href="/paylink">/paylink</a>: a real dApp using every piece on this page</span></div>
+</div>
+
+<h2 id="wallets"><span class="n">01</span>The wallets</h2>
+<p>Three wallets, one API. A user brings whichever they have; your code doesn't change.</p>
+<div class="wallets">
+  <div class="wallet">
+    <div class="ic ext"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#120b18" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 9h18"/></svg></div>
+    <b>Sapient extension</b><span>Chrome, Brave or Edge on desktop. Injects <code>window.tari</code> into every page.</span>
+    <span class="via">window.tari</span>
+  </div>
+  <div class="wallet">
+    <span class="badge">New</span>
+    <div class="ic phone"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#120b18" stroke-width="2.2" stroke-linecap="round"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18h3"/></svg></div>
+    <b>Sapient for Android</b><span>The wallet on the user's phone. Pairs by QR code on desktop or opens the app directly on mobile.</span>
+    <span class="via">WalletConnect v2</span>
+  </div>
+  <div class="wallet">
+    <div class="ic uni"><img src="/tari-favicon.svg" width="26" height="26" alt=""></div>
+    <b>Tari Universe</b><span>The web wallet at universe.tari.mw. Runs your dApp in an iframe and answers its calls.</span>
+    <span class="via">postMessage bridge</span>
+  </div>
+</div>
+
+<h2 id="quickstart"><span class="n">02</span>Quick start</h2>
+<p>Pick the level of control you want. All three give you a provider with the same <code>request()</code> API.</p>
+<div class="tabs" data-tabs>
+  <div class="tablist" role="tablist">
+    <button role="tab" type="button" aria-selected="true">Drop-in button</button>
+    <button role="tab" type="button" aria-selected="false">Your own button</button>
+    <button role="tab" type="button" aria-selected="false">Just window.tari</button>
+  </div>
+  <div class="panel" role="tabpanel" data-label="Drop-in button">
+<p>A ready-made <strong>Connect wallet</strong> button. It opens the wallet picker, then shows the connected
+address; clicking it again disconnects.</p>
+<pre><code><span class="c">&lt;!-- 1. Optional: let phone users connect with Sapient for Android (see "Sapient for Android") --&gt;</span>
+&lt;script src=<span class="s">"/wc-config.js"</span>&gt;&lt;/script&gt;
+<span class="c">&lt;!-- 2. The connector and the picker --&gt;</span>
+&lt;script src=<span class="s">"https://universe.tari.mw/tari-connector.js"</span>&gt;&lt;/script&gt;
+&lt;script src=<span class="s">"https://universe.tari.mw/tari-connect.js"</span>&gt;&lt;/script&gt;
+
+<span class="c">&lt;!-- 3. The button --&gt;</span>
+&lt;tari-connect-button theme=<span class="s">"dark"</span>&gt;&lt;/tari-connect-button&gt;</code></pre>
+<pre><code>document.querySelector(<span class="s">"tari-connect-button"</span>).addEventListener(<span class="s">"tari-connect"</span>, <span class="k">async</span> (e) =&gt; {
+  <span class="k">const</span> { wallet, provider, accounts } = e.detail;
+  <span class="c">// wallet: "sapient-extension" | "sapient-mobile" | "tari-universe"</span>
+  <span class="k">const</span> balances = <span class="k">await</span> provider.request({ method: <span class="s">"tari_getBalances"</span> });
+});</code></pre>
+  </div>
+  <div class="panel" role="tabpanel" data-label="Your own button" hidden>
+<p>Keep your own design; open the picker from it. Show a loading state while it runs: over WalletConnect the
+user may be approving on their phone.</p>
+<pre><code>connectBtn.addEventListener(<span class="s">"click"</span>, <span class="k">async</span> () =&gt; {
+  connectBtn.disabled = <span class="k">true</span>;
+  connectBtn.textContent = <span class="s">"Connecting…"</span>;
+  <span class="k">try</span> {
+    <span class="k">const</span> { provider, accounts } = <span class="k">await</span> TariConnect.open({ theme: <span class="s">"dark"</span> });
+    showApp(provider, accounts[0]);
+  } <span class="k">catch</span> (e) {
+    <span class="k">if</span> (e.code !== 4001) showError(e.message); <span class="c">// 4001: closed the picker or declined</span>
+  } <span class="k">finally</span> {
+    connectBtn.disabled = <span class="k">false</span>;
+    connectBtn.textContent = <span class="s">"Connect wallet"</span>;
+  }
+});</code></pre>
+  </div>
+  <div class="panel" role="tabpanel" data-label="Just window.tari" hidden>
+<p>No picker. Works with the extension and inside Tari Universe; with <code>TARI_WALLETCONNECT</code> set it
+also pairs with Sapient for Android on the first call.</p>
+<pre><code>&lt;script src=<span class="s">"https://universe.tari.mw/tari-connector.js"</span>&gt;&lt;/script&gt;</code></pre>
+<pre><code><span class="k">const</span> [account] = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_requestAccounts"</span> });
+<span class="k">const</span> balances  = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_getBalances"</span> });
+<span class="k">const</span> caps      = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_getCapabilities"</span> });</code></pre>
+  </div>
+</div>
+<p>Include <code>tari-connector.js</code> always. It supplies the provider inside Tari Universe and over
+WalletConnect, and stands aside when an extension already owns <code>window.tari</code>.</p>
+
+<h2 id="how"><span class="n">03</span>How it connects</h2>
+<div class="diagram" role="img" aria-label="Your dApp calls window.tari or TariConnect. tari-connector.js routes the call to Tari Universe over postMessage when embedded, to the Sapient extension when installed, or over the WalletConnect relay to Sapient for Android.">
+<svg viewBox="0 0 760 270" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#98a2b3"/></marker>
+    <linearGradient id="gp" x1="0" x2="1"><stop offset="0" stop-color="#fc72ff"/><stop offset="1" stop-color="#a259ff"/></linearGradient>
+  </defs>
+  <rect x="10" y="95" width="150" height="80" rx="14" fill="#181c22" stroke="rgba(255,255,255,.14)"/>
+  <text x="85" y="128" text-anchor="middle" fill="#eef1f5" font-size="15" font-weight="700">Your dApp</text>
+  <text x="85" y="150" text-anchor="middle" fill="#98a2b3" font-size="12" font-family="ui-monospace,Menlo,monospace">window.tari</text>
+  <rect x="215" y="95" width="170" height="80" rx="14" fill="#181c22" stroke="#9d6bff"/>
+  <text x="300" y="128" text-anchor="middle" fill="#eef1f5" font-size="14" font-weight="700">tari-connector.js</text>
+  <text x="300" y="150" text-anchor="middle" fill="#98a2b3" font-size="12">+ tari-connect.js picker</text>
+  <path d="M160 135H209" stroke="#98a2b3" stroke-width="1.6" marker-end="url(#ar)"/>
+  <path d="M385 120C430 120 430 42 470 42" fill="none" stroke="#98a2b3" stroke-width="1.6" marker-end="url(#ar)"/>
+  <path d="M385 135H470" stroke="#98a2b3" stroke-width="1.6" marker-end="url(#ar)"/>
+  <path d="M385 150C430 150 430 228 470 228" fill="none" stroke="#35c9b0" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+  <text x="418" y="60" fill="#98a2b3" font-size="11">embedded</text>
+  <text x="404" y="128" fill="#98a2b3" font-size="11">injected</text>
+  <text x="402" y="210" fill="#35c9b0" font-size="11">relay, E2E</text>
+  <rect x="476" y="12" width="274" height="60" rx="12" fill="#14171c" stroke="rgba(255,255,255,.14)"/>
+  <text x="494" y="38" fill="#eef1f5" font-size="14" font-weight="700">Tari Universe</text>
+  <text x="494" y="58" fill="#98a2b3" font-size="12">iframe · postMessage</text>
+  <rect x="476" y="105" width="274" height="60" rx="12" fill="#14171c" stroke="rgba(255,255,255,.14)"/>
+  <text x="494" y="131" fill="#eef1f5" font-size="14" font-weight="700">Sapient extension</text>
+  <text x="494" y="151" fill="#98a2b3" font-size="12">approval popup in the browser</text>
+  <rect x="476" y="198" width="274" height="60" rx="12" fill="#14171c" stroke="url(#gp)"/>
+  <text x="494" y="224" fill="#eef1f5" font-size="14" font-weight="700">Sapient for Android</text>
+  <text x="494" y="244" fill="#98a2b3" font-size="12">WalletConnect v2 · approve on the phone</text>
+</svg>
+</div>
+<table>
+<tr><th>Where the page runs</th><th><code>window.tari</code> is</th><th><code>transport</code></th></tr>
+<tr><td>Inside Tari Universe (iframe)</td><td>Universe's bridge. Wins even over an installed extension</td><td><code>"embedded"</code></td></tr>
+<tr><td>A tab with the Sapient extension</td><td>The extension's provider; the connector never displaces it</td><td>—</td></tr>
+<tr><td>A tab with neither, WalletConnect opted in</td><td>WalletConnect to Sapient for Android</td><td><code>"walletconnect"</code></td></tr>
+<tr><td>A tab with neither, no opt-in</td><td>A stub: every call rejects</td><td><code>null</code></td></tr>
+</table>
+<p><code>window.tari.isAvailable</code> is <code>true</code> when calls can reach a wallet. <code>window.tariUniverse</code>
+is always the connector's own object, so with the extension installed you can still reach Sapient for Android
+through it. That is exactly what the picker does.</p>
+
+<h2 id="walletconnect"><span class="n">04</span>Sapient for Android</h2>
+<p>Opt in, and users without the extension can connect with the Sapient app on their phone. Requests travel
+end-to-end encrypted over the WalletConnect relay; keys never leave the phone, and every approval happens there.</p>
+<ol class="steps">
+<li><b>Optional for production: get a project ID.</b> Without one the connector uses a shared project, which is fine
+for trying it out. For production, create a free project at <a href="https://cloud.reown.com" rel="noopener">cloud.reown.com</a>
+(Reown runs the WalletConnect relay). The ID is public; it identifies your dApp to the relay and gives you your own quota.</li>
+<li><b>Add your domain to the project's allowed domains.</b> Sapient then shows your site as
+<strong>✓ Verified</strong> on every approval instead of <em>claimed by dApp</em>. A dApp on the shared project always shows as unverified.</li>
+<li><b>Set the config before the connector loads.</b> Put it in its own file if your CSP blocks inline scripts:
+<pre><code><span class="c">// wc-config.js</span>
+window.TARI_WALLETCONNECT = {
+  <span class="c">// projectId: "&lt;your Reown project id&gt;",   optional; a shared one is used if omitted</span>
+  network: <span class="s">"mainnet"</span>,          <span class="c">// or "esmeralda"; must match the network the phone is on</span>
+  <span class="c">// metadata: { name, description, url, icons }   optional; defaults from the page</span>
+};</code></pre></li>
+<li><b>Allow the relay in your CSP</b>, if you send one. <code>connect-src</code> needs:
+<pre><code>connect-src 'self' wss://relay.walletconnect.org https://rpc.walletconnect.org
+  https://pulse.walletconnect.org https://verify.walletconnect.org
+  https://verify.walletconnect.com https://echo.walletconnect.com;</code></pre></li>
+</ol>
+<h3>What your users see</h3>
+<div class="flow">
+  <div><b>Desktop</b>A QR code (with a loading shimmer while the pairing link is prepared). They scan it from Sapient's Scan tab.</div>
+  <div><b>Phone browser</b>An <em>Open Sapient</em> button that opens the app directly. No QR code, no copy-paste.</div>
+  <div><b>In Sapient</b>Your site's name, icon and verification status, then an approval for each request.</div>
+  <div><b>Waiting</b>A <em>Check Sapient</em> sheet while a request waits on the phone. After 15 s it offers <em>Pair again</em>.</div>
+</div>
+<ul>
+<li><strong>Sessions persist.</strong> After a reload the next call reuses the session without a new QR code.
+If the user removed your site in Sapient, <em>Pair again</em> drops the stale session and shows a fresh code.</li>
+<li><strong>Network:</strong> Sapient refuses a session for a network it isn't on. Set <code>network</code> to match,
+and listen for <code>networkChanged</code>.</li>
+<li><strong>Lazy:</strong> the WalletConnect code (<code>tari-connector-wc.js</code>, ~160 KB gzipped) loads only on
+the first call that needs it. Without <code>TARI_WALLETCONNECT</code> nothing about the connector changes.</li>
+<li><strong>Cancel</strong> on the QR dialog or the waiting sheet rejects the call with <code>4001</code>.</li>
+</ul>
+
+<h2 id="picker"><span class="n">05</span>Wallet picker</h2>
+<p><code>tari-connect.js</code> (4 KB gzipped) is a Connect dialog listing the wallets a user can actually use
+from your page. It lives in a Shadow DOM, so your CSS can't break it and it can't leak into yours; on a phone it
+becomes a bottom sheet, and it remembers the last wallet used.</p>
+<table>
+<tr><th>Option</th><th>Shown when</th><th>On choose</th></tr>
+<tr><td>Sapient extension</td><td>Desktop: <strong>Detected</strong> when installed, otherwise <strong>Install</strong> (Chrome Web Store)</td><td>The extension's approval popup</td></tr>
+<tr><td>Sapient for Android</td><td>You set <code>TARI_WALLETCONNECT</code>. Listed first on phones</td><td>QR code (desktop) / Open Sapient (phone)</td></tr>
+<tr><td>Tari Universe</td><td>The page runs inside Universe</td><td>Used directly, no dialog</td></tr>
+</table>
+<h3>API</h3>
+<table>
+<tr><th>Call</th><th>Does</th></tr>
+<tr><td><code>TariConnect.open({ theme?, title? })</code></td><td>Shows the picker; resolves <code>{ wallet, provider, accounts }</code>. Rejects with <code>4001</code> if closed.</td></tr>
+<tr><td><code>TariConnect.discover()</code></td><td>The options above, without showing anything. Build your own UI from it.</td></tr>
+<tr><td><code>TariConnect.connection()</code></td><td>The current <code>{ wallet, provider, accounts }</code>, or <code>null</code>.</td></tr>
+<tr><td><code>TariConnect.disconnect()</code></td><td>Ends the session (where the wallet supports it) and forgets it.</td></tr>
+<tr><td><code>&lt;tari-connect-button&gt;</code></td><td>Attributes <code>label</code>, <code>theme</code>. Events <code>tari-connect</code> (<code>detail</code> = the result) and <code>tari-disconnect</code>.</td></tr>
+</table>
+
+<h2 id="methods"><span class="n">06</span>Methods</h2>
+<table>
+<tr><th>Method</th><th>Params</th><th>Returns</th></tr>
+<tr><td><code>tari_requestAccounts</code></td><td>—</td><td><code>string[]</code> — <strong>prompts</strong></td></tr>
+<tr><td><code>tari_getAccounts</code></td><td>—</td><td><code>string[]</code>, empty when disconnected. Never prompts</td></tr>
+<tr><td><code>tari_getNetwork</code></td><td>—</td><td>network name; no connection needed</td></tr>
+<tr><td><code>tari_getWalletAddress</code></td><td>—</td><td>bech32m wallet address (<code>otl_…</code>) — address a private output to this, never the component address</td></tr>
+<tr><td><code>tari_getBalances</code></td><td>—</td><td><code>TokenBalance[]</code></td></tr>
+<tr><td><code>tari_getCapabilities</code></td><td>—</td><td><code>WalletCapabilities</code></td></tr>
+<tr><td><code>tari_getSubstate</code></td><td><code>{substateId, version?}</code></td><td>the substate</td></tr>
+<tr><td><code>tari_getTransactionResult</code></td><td><code>{transactionId}</code></td><td>the result</td></tr>
+<tr><td><code>tari_signAndSubmitTransaction</code></td><td><code>{instructions, maxFee?, inputs?, dryRun?}</code></td><td><strong>prompts unless <code>dryRun</code></strong></td></tr>
+<tr><td><code>tari_createTransactionRequest</code></td><td><code>TransactionRequestOperation</code></td><td><code>{requestId}</code> — <strong>prompts</strong> (opens the approval, doesn't block on it)</td></tr>
+<tr><td><code>tari_getTransactionRequest</code></td><td><code>{requestId}</code></td><td><code>{status, note, result?, error?}</code> — poll until not <code>"pending"</code></td></tr>
+<tr><td><code>tari_submitTransactionRequest</code></td><td><code>{requestId}</code></td><td>the operation's result</td></tr>
+<tr><td><code>tari_requestViewAccess</code></td><td>—</td><td><code>{granted}</code> — <strong>prompts</strong>, read-only, never authorizes a spend</td></tr>
+<tr><td><code>tari_getPrivateBalances</code></td><td>—</td><td><code>PrivateBalance[]</code> (needs view access)</td></tr>
+<tr><td><code>tari_signOwnershipChallenge</code></td><td><code>{resourceAddress, substateId, challenge}</code></td><td><code>{publicKey, publicNonce, signature}</code> — <strong>prompts</strong>. Proves control of one output</td></tr>
+<tr><td><code>tari_signWalletOwnershipChallenge</code></td><td><code>{challenge}</code></td><td><code>{walletAddress, publicNonce, signature}</code> — <strong>prompts</strong>. Proves control of the address itself, no output involved</td></tr>
+<tr><td><code>tari_getBalanceProofSubject</code></td><td>—</td><td>this wallet's per-site GGBP-1 subject key and challenge parameters — <strong>prompts</strong>. Web wallet only, see <a href="#balance-proof">L1 balance proofs</a></td></tr>
+<tr><td><code>tari_requestBalanceProof</code></td><td><code>{protocol: "ggbp1", version: 3, challenge}</code></td><td><code>{protocol, version, response}</code> — <strong>prompts</strong>. Web wallet only</td></tr>
+<tr><td><code>tari_disconnect</code></td><td>—</td><td><code>null</code></td></tr>
+</table>
+<p>Every wallet implements everything above, over every transport, including the transaction-request trio and
+the private-spend kinds below — except the two GGBP-1 balance-proof methods, which only the web wallet answers
+(Sapient replies <code>4200</code>; <code>ggbp1BalanceProof</code> tells you which you have). Check <code>tari_getCapabilities</code> because <em>accounts</em> can differ (a
+daemon-relayed account has no view secret), not because the wallets do.</p>
+<div class="card note"><strong>Prefer the transaction-request trio.</strong> <span style="color:var(--dim)">Over WalletConnect the user approves on another device, possibly minutes later. <code>tari_createTransactionRequest</code> persists the request wallet-side, so you can poll the same <code>requestId</code> after a reload; the single-call method loses its result if the page goes away.</span></div>
+
+<h2 id="capabilities"><span class="n">07</span>Feature-detect, never wallet-detect</h2>
+<pre><code><span class="k">const</span> caps = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_getCapabilities"</span> });
+<span class="k">if</span> (caps.stealthWithdraw) { <span class="c">/* … */</span> } <span class="k">else</span> { <span class="c">/* offer the plain path */</span> }</code></pre>
+<p>Fields: <code>exactInputSelection</code>, <code>stealthWithdraw</code>, <code>stealthRedeem</code>, <code>stealthRedeemPrivateFee</code>, <code>htlcFund</code>,
+<code>scriptPathSpend</code>, <code>privateSpend</code>, <code>minimumValuePromise</code>,
+<code>ownershipProof</code>, <code>walletOwnershipProof</code>, <code>privateBalanceView</code>, <code>privateViewGranted</code>,
+<code>transactionResultLookup</code>, <code>transactionRequests</code>, <code>walletAddress</code>,
+<code>dryRunIsLocal</code>, <code>ggbp1BalanceProof</code> (<code>false</code> or the v3 parameters, see
+<a href="#balance-proof">L1 balance proofs</a>). If you catch yourself writing <code>if (isSapient)</code>, reach for one of these.</p>
+
+<h2 id="private"><span class="n">08</span>Private spends &amp; proof of funds</h2>
+<p>Ask for a private spend through <code>tari_createTransactionRequest</code> with
+<code>kind: "shield" | "unshield" | "sendPrivately" | "withdrawStealthAndExecute" |
+"redeemStealthOutputAndExecute" | "redeemStealthOutputWithPrivateFee" | "htlcFund" | "htlcClaim" | "htlcRefund"</code>.
+<strong>You cannot build a stealth transfer yourself</strong> — a raw <code>StealthTransfer</code>
+instruction passed as <code>{ kind: "instructions" }</code> is rejected outright; it needs a balance proof
+and per-input authorizations only the wallet's own signer can produce.</p>
+<p><code>withdrawStealthAndExecute</code> and <code>redeemStealthOutputAndExecute</code> reveal stealth
+value onto the transaction's workspace as a <code>Bucket</code> (id <code>0</code> — reference it as
+<code>{ Workspace: { id: 0, offset: null } }</code>, a plain integer, not a name) and run your own
+<code>followUpInstructions</code> against it in the same signed transaction — the difference is only
+where the value comes from. <code>withdrawStealthAndExecute</code> draws an <code>amount</code> from the
+connected wallet's own tracked private balance, coin-selected by the wallet. <code>redeemStealthOutputAndExecute</code>
+spends one <em>specific</em> stealth output — identified by <code>commitmentHex</code>, with its actual
+<code>revealedAmount</code> — that some other party minted directly to the connected wallet's address (a
+ballot, a ticket, a voucher): there's nothing to coin-select, you already know exactly which output and
+how much it's worth. List every other component your <code>followUpInstructions</code> touch in
+<code>relatedComponents</code>, or the engine rejects the unregistered substate with <code>SubstateNotFound</code>.
+See <a href="/integration/llms-full.txt">llms-full.txt</a> for the full type signatures and a worked example.</p>
+<p>Both of those pay their fee from the wallet's <strong>revealed</strong> balance — fine normally, but if
+<code>followUpInstructions</code> itself carries something that would deanonymize the wallet if the fee
+input did (a voting ballot's ranking, say), a revealed fee defeats the whole point: it signs with the
+wallet's ordinary key, linking the transaction to the account just as plainly as an unshielded send would.
+<code>redeemStealthOutputWithPrivateFee</code> closes that gap — same as <code>redeemStealthOutputAndExecute</code>,
+except the fee is <em>also</em> paid from a second stealth UTXO (<code>feeResourceAddress</code> +
+<code>feeCommitmentHex</code>, a stealth output the wallet already owns and can decrypt, e.g. from its own
+prior <code>shield</code>). Confirmed live: the resulting transaction's substate diff contains only the two
+stealth UTXOs and whatever <code>relatedComponents</code> touch — no trace of the wallet's account address.
+<code>maxFee</code> is still revealed publicly as a flat amount (bucket-paid fees have no refund
+destination), and the result carries <code>feeChangeCommitment</code> — the fee UTXO's unspent remainder,
+which you must track yourself to fund a later call the same way.</p>
+<p><code>shield</code> and <code>sendPrivately</code> accept <code>minimumValuePromise</code> — a public,
+permanent claim baked into the new output's own range proof that it's worth <strong>at least</strong> that
+much. That output becomes a self-contained, non-interactively verifiable proof of funds:</p>
+<pre><code><span class="c">// Prove this wallet can cover 100000, without revealing what it actually holds.</span>
+<span class="k">const</span> { requestId } = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_createTransactionRequest"</span>, params: {
+  kind: <span class="s">"shield"</span>, resourceAddress, amount: <span class="s">"100000"</span>, minimumValuePromise: <span class="s">"100000"</span>,
+}});
+<span class="c">// ...poll tari_getTransactionRequest until approved, then tari_submitTransactionRequest.
+// The result carries `substateId` — put that in your link.
+
+// Anyone verifies it — no wallet, no signature, no live session:</span>
+<span class="k">const</span> substate = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_getSubstate"</span>, params: { substateId } });
+<span class="c">// -> read `minimum_value_promise` off the output, and confirm the substate is still unspent.</span></code></pre>
+<p>Three things to design around: the disclosure is <strong>public and permanent</strong> for as long as the
+output exists, not just to whoever the proof was for; it proves <strong>one output</strong>, not a whole
+balance (shield the full amount into one output first to prove total spending power); and
+<strong>spending the output destroys the proof</strong> — a verifier must re-check the substate is still
+unspent at the moment they care, not merely that it once existed.</p>
+
+<h2 id="ownership"><span class="n">09</span>Ownership proofs — who's showing you the link</h2>
+<p>A <code>minimumValuePromise</code> link is a <strong>bearer artifact</strong>: it proves an output exists
+and is unspent, not who is presenting it. Anyone who obtains the <code>substateId</code> — a screenshot, a
+forwarded link — can present it identically. Closing that gap needs a signature over a challenge <strong>the
+verifier generated themselves</strong>:</p>
+<pre><code><span class="c">// The verifier makes this up and gives it to the prover through their own channel:</span>
+<span class="k">const</span> challenge = <span class="s">"prove-carol-"</span> + <span class="k">new</span> Date().toISOString() + <span class="s">"-"</span> + crypto.randomUUID();
+
+<span class="c">// The prover's wallet signs it:</span>
+<span class="k">const</span> { publicKey, publicNonce, signature } = <span class="k">await</span> window.tari.request({
+  method: <span class="s">"tari_signOwnershipChallenge"</span>,
+  params: { resourceAddress, substateId, challenge },
+});
+
+<span class="c">// The verifier checks the response against the substate's OWN on-chain key —
+// never against `publicKey` at face value, since anyone can self-report any key:</span>
+<span class="k">const</span> substate = <span class="k">await</span> window.tari.request({ method: <span class="s">"tari_getSubstate"</span>, params: { substateId } });
+<span class="k">const</span> authKey = substate.substate.Utxo.output.auth.Key;
+<span class="c">// authKey === publicKey, and (publicNonce, signature) verify against it and `challenge`
+// via standard Ristretto/Schnorr verification — see the reference implementation below.</span></code></pre>
+<p>The bytes actually signed are not <code>challenge</code> alone — the wallet wraps it under a domain tag
+(<code>com.tari.paylink.ownership_proof</code>) disjoint from real transaction signing
+(<code>com.tari.ootle.transaction</code>), which is exactly why there's no way to ask for a raw signature
+over an arbitrary message instead: doing that naively risks a signature that's replayable as spend
+authorization. A static or reused challenge proves nothing about <em>when</em> — always generate a fresh one
+per check.</p>
+<p>Working reference implementation, challenge/response UI included, at
+<a href="/paylink">/paylink</a> — its verify page runs the Ristretto/Schnorr check entirely client-side
+against public on-chain data, no wallet required to check someone else's proof.</p>
+<h3>Proving you hold a wallet address, generically</h3>
+<p><code>tari_signWalletOwnershipChallenge</code> is the same idea with no output involved — it proves the
+connected account holds its own <code>otl_…</code> wallet address, full stop:</p>
+<pre><code><span class="k">const</span> { walletAddress, publicNonce, signature } = <span class="k">await</span> window.tari.request({
+  method: <span class="s">"tari_signWalletOwnershipChallenge"</span>,
+  params: { challenge: <span class="s">"prove-carol-2026-09-03-8f2a1c"</span> },
+});</code></pre>
+<p>Signs with the account's own persistent owner key, under its own domain tag
+(<code>com.tari.paylink.wallet_ownership_proof</code>) — deliberately different from both real transaction
+signing <em>and</em> the per-output proof's domain, so a signature can never be mistaken for the wrong kind
+of claim. A verifier decodes the owner key from the address <strong>they</strong> already have in mind
+(<code>parseOotleAddress</code>, no network call needed) and checks against that — never against
+<code>walletAddress</code> as returned. Requires <code>capabilities.walletOwnershipProof</code>. The
+<a href="/paylink">/paylink</a> page's "Prove you hold a wallet address" / "Check a wallet ownership proof"
+widgets are a working example of both sides.</p>
+
+<h3 id="balance-proof">L1 balance proofs (GGBP-1 v3) — experimental, Esmeralda only</h3>
+<p>The web wallet can prove that it holds <strong>at least</strong> some amount of L1 XTM, without revealing the
+exact amount and without moving anything. The proof is a GGBP-1 v3 aggregate-threshold proof over the wallet's
+own L1 outputs: a Bulletproofs+ range proof that their summed commitments reach your threshold, plus Schnorr
+signatures from each output's script key and from a per-site subject key, all bound to your challenge.
+Check <code>capabilities.ggbp1BalanceProof</code> first: <code>false</code>, or
+<code>{ protocolVersion: 3, network: "esmeralda", maxOutputs: 16, maxProofBytes: 8192 }</code>.</p>
+<pre><code><span class="c">// 1. Once per user: ask for this wallet's subject key for your site (the user approves).</span>
+<span class="k">const</span> subject = <span class="k">await</span> window.tari.getBalanceProofSubject();
+<span class="c">// { protocol: "ggbp1", version: 3, network, genesisHash, originHash,
+//   subjectPublicKey, commitmentGeneratorFingerprint }  (hex)</span>
+
+<span class="c">// 2. Your server issues a 223-byte challenge (fresh nonce, threshold, expiry, gate ids):
+//    "GGBP1" ‖ 0x03 ‖ network ‖ genesisHash ‖ originHash ‖ gate_id(16) ‖ le64(gate_config_version)
+//    ‖ subject_id(16) ‖ subjectPublicKey ‖ le64(threshold µT) ‖ nonce(32) ‖ le64(expires_at)
+//    ‖ commitmentGeneratorFingerprint                       — sent as unpadded base64url</span>
+
+<span class="c">// 3. The wallet shows the user exactly which outputs it will disclose.</span>
+<span class="k">const</span> { response } = <span class="k">await</span> window.tari.requestBalanceProof(challenge);
+
+<span class="c">// 4. Your server: parse the GGBP1R v3 response, compare every challenge field with what it
+//    issued, run the v3 verifier, then check each disclosed output on chain (exists, unspent).</span></code></pre>
+<ul>
+<li><strong>It proves the cryptography, not that the money is still there.</strong> The outputs could be spent
+a block later, and the verifier cannot tell a real output from a made-up one. Check every disclosed output
+hash against the chain yourself, and revalidate before you rely on it again.</li>
+<li><strong>It is not anonymous.</strong> The response names the outputs' hashes and commitments: you can find
+them on chain and see they share an owner. The exact amounts stay hidden.</li>
+<li><code>originHash</code> is <code>SHA-256("GGBP1/origin" ‖ origin)</code> for your page's exact origin; a
+challenge for any other origin, network, subject key or an expired one is refused with <code>-32603</code>.</li>
+<li>A user declining <em>and</em> "this wallet can't reach the threshold" both reject with <code>4001</code>,
+so you cannot probe balances. The wallet also allows one open request per site and 10 per hour.</li>
+<li>Thresholds come from your server, never from user input on the page. Version 2 of GGBP-1 is unsafe and is
+never produced.</li>
+</ul>
+<p>Full encodings, the subject-key derivation and what the wallet checks:
+<a href="https://github.com/chironbuilds/tari-l1-wallet-ui/blob/master/docs/ggbp1/WALLET_INTEGRATION.md" rel="noopener">WALLET_INTEGRATION.md</a>.</p>
+
+<h2 id="resources"><span class="n">10</span>Resource types — what "private" means depends on the resource</h2>
+<p><code>ResourceType</code> (<code>Fungible | NonFungible | Confidential | Stealth</code>) is fixed
+per-resource at creation, not a wallet or dApp choice. Everything above works for <strong>any</strong>
+<code>Stealth</code>-type resource, not just XTR — nothing in the API is XTR-specific.</p>
+<ul>
+<li><strong>Fungible / NonFungible</strong> — plain, public on-chain data. No wallet call needed to read
+them: derive the component address from the wallet address and query the indexer's vaults directly.
+Combine with <code>tari_signWalletOwnershipChallenge</code> to attach "and this is verifiably them" to
+an otherwise fully public lookup — see <a href="/paylink">/paylink</a>'s "Look up public holdings" (no
+signature) and "Check a wallet ownership proof" (adds the identity check).</li>
+<li><strong>Stealth</strong> — everything else on this page.</li>
+<li><strong>Confidential</strong> — a <em>different</em> privacy mechanism: vault-based,
+ElGamal-encrypted to a resource-specific view key. A closed, reveal-to-one-party model, not a public
+floor proof — there is no <code>minimumValuePromise</code> equivalent for it, and this API surface
+doesn't expose deposit/withdraw or balance-decryption for Confidential vaults.</li>
+</ul>
+
+<h2 id="quotes"><span class="n">11</span>Quotes are free</h2>
+<pre><code><span class="k">await</span> window.tari.request({
+  method: <span class="s">"tari_signAndSubmitTransaction"</span>,
+  params: { instructions, maxFee: <span class="s">"5000"</span>, dryRun: <span class="k">true</span> },
+});</code></pre>
+<p><strong><code>dryRun: true</code> never prompts and spends nothing.</strong> Use it for pricing that
+reprices as the user types; only a real submission asks for approval.</p>
+
+<h2 id="events"><span class="n">12</span>Events</h2>
+<pre><code>window.addEventListener(<span class="s">"tari#initialized"</span>, () =&gt; { <span class="c">/* a provider is ready */</span> });
+
+<span class="k">const</span> off = provider.on?.(<span class="s">"accountsChanged"</span>, (accounts) =&gt; refresh(accounts));
+provider.on?.(<span class="s">"networkChanged"</span>, (network) =&gt; refresh());
+provider.on?.(<span class="s">"disconnect"</span>, () =&gt; showConnectButton());   <span class="c">// WalletConnect: ended from either side</span></code></pre>
+<p><code>window.tari</code> may not exist at parse time — the extension injects at <code>document_start</code>,
+the connector on script load. Listen for <code>tari#initialized</code> rather than reading it in a module body.
+<code>on()</code> returns an unsubscribe function.</p>
+
+<h2 id="errors"><span class="n">13</span>Errors</h2>
+<table>
+<tr><th>Code</th><th>Meaning</th><th>Do</th></tr>
+<tr><td><code>4001</code></td><td>User rejected, or closed the picker / QR dialog</td><td>Not an error — return to the pre-connect state quietly</td></tr>
+<tr><td><code>4100</code></td><td>Not connected</td><td>Call <code>tari_requestAccounts</code></td></tr>
+<tr><td><code>4200</code></td><td>Unsupported here</td><td>Feature-detect</td></tr>
+<tr><td><code>-32603</code></td><td>Internal / network rejection</td><td>Show <code>message</code> — it carries the chain's reason</td></tr>
+</table>
+
+<h2 id="embedding"><span class="n">14</span>Being embeddable</h2>
+<p>Tari Universe runs dApps in a cross-origin iframe. If you send <code>X-Frame-Options</code> or a CSP
+that excludes it, the wallet falls back to opening you in a tab. To allow embedding:</p>
+<pre><code>Content-Security-Policy: frame-ancestors 'self' https://universe.tari.mw;</code></pre>
+
+<div class="card warn" id="pitfalls">
+<h3 style="margin-top:0">Pitfalls that cost real time</h3>
+<ul>
+<li><strong>An inline <code>TARI_WALLETCONNECT</code> script is silently blocked by a strict CSP.</strong> The
+connector then never offers Sapient for Android and the picker shows only the extension. Load the config from
+a file on your own origin.</li>
+<li><strong>A QR code that never connects is usually <code>connect-src</code>.</strong> The pairing link is made
+locally, but the relay socket is blocked; your console shows the CSP violation.</li>
+<li><strong>Don't leave a dead Connect button while the user approves on their phone.</strong> Disable it and show
+progress until <code>TariConnect.open()</code> settles, or the page looks broken while the real action is on another device.</li>
+<li><strong>Wallet addresses are not component addresses.</strong> Users hold <code>otl_esm_1…</code>;
+instruction arguments need <code>component_…</code>. Passing the wrong one fails deep in deserialization
+as <em>"data did not match any variant of untagged enum TransactionInput"</em>, naming neither field nor reason.</li>
+<li><strong>An account is created on first funding.</strong> Depositing into one that has never received
+anything aborts with <code>OneOrMoreInputsNotFound</code>; creating one that exists rejects with
+<em>"is already UP and conflicts with an existing output"</em>. Check, then create only if absent.</li>
+<li><strong>Do not pin cached substate versions.</strong> Let the wallet resolve them, or you get
+<code>Lock failure: Substate …:N is not found or DOWN</code>.</li>
+<li><strong>Amounts are strings or bigints, never JS numbers</strong> — they exceed
+<code>Number.MAX_SAFE_INTEGER</code>. Divide by <code>10 ** divisibility</code> to display; never assume 6.</li>
+<li><strong>A Stealth resource holds two balances.</strong> <code>amount</code> is the revealed side,
+<code>confidentialAmount</code> the stealth side. A revealed balance of 0 does not mean empty.</li>
+<li><strong>A proof-of-funds link doesn't prove who's showing it to you.</strong> Check that with
+<code>tari_signOwnershipChallenge</code> against a challenge you generated, verified against the
+substate's own <code>auth.Key</code> — never against a public key the other party supplies about
+themselves.</li>
+</ul>
+</div>
+
+<div class="hr"></div>
+<footer>Tari Universe · <a href="https://universe.tari.mw">universe.tari.mw</a> — point your coding agent at
+<a href="/integration/llms.txt">llms.txt</a> or drop <a href="/integration/SKILL.md">SKILL.md</a> into its skills directory.
+Want a script that never changes? Pin <a href="/tari-connector.v1.js">tari-connector.v1.js</a> (the original, before WalletConnect).</footer>
+</main>
+</div>
+<script src="/integration/docs.js"></script>
+</body></html>

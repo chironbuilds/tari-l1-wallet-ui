@@ -1,0 +1,511 @@
+---
+name: tari-dapp-integration
+description: Connect a web dApp to a Tari Ootle wallet through window.tari — request accounts, read balances and substates, submit signed transactions, and build proof-of-funds / private-spend flows. Use when building or debugging a dApp that needs a Tari wallet, when you see window.tari / tari_requestAccounts / tari_signAndSubmitTransaction / tari_createTransactionRequest in code, or when a Tari wallet connection is failing.
+---
+
+# Tari dApp integration
+
+One interface, `window.tari`, implemented by every Tari wallet. **Never detect which wallet you
+have.** Call methods, and branch on `tari_getCapabilities` when you need to know what is supported.
+
+Two wallets implement it today:
+
+- **Sapient**, a browser extension. Injects `window.tari` into every page.
+- **Tari Universe**, a web wallet at `universe.tari.mw`. Runs dApps in a cross-origin iframe; the
+  provider is supplied by a connector script the dApp includes.
+
+Both implement the full surface below, transaction-request trio and private spends included.
+Nothing left is wallet-specific — `tari_getCapabilities` still exists because *accounts* differ
+(a daemon-relayed account has no view secret), not because the two wallets differ.
+
+## Setup
+
+```html
+<script src="https://universe.tari.mw/tari-connector.js"></script>
+```
+
+Include it always. It is what makes the wallet reachable when your dApp is embedded in Tari
+Universe, and it stands aside when an extension already owns `window.tari` in an ordinary tab.
+
+```js
+if (!window.tari) {
+  // No Tari wallet on this page. Show an install/open prompt — do not poll forever.
+}
+```
+
+## The API
+
+Everything goes through `request`, exactly like `window.ethereum`:
+
+```js
+const result = await window.tari.request({ method: "tari_…", params: { … } });
+```
+
+| Method | Params | Returns |
+|---|---|---|
+| `tari_requestAccounts` | — | `string[]` of account component addresses. **Prompts the user.** |
+| `tari_getAccounts` | — | `string[]`; `[]` when not connected. Never prompts — safe to poll. |
+| `tari_getNetwork` | — | network name. Answerable without a connection. |
+| `tari_getWalletAddress` | — | the connected account's **bech32m wallet address** (`otl_…`) — what you address a private/stealth output to. Not the same value as, nor derivable from, the component address. |
+| `tari_getBalances` | — | `TokenBalance[]`; `[]` when not connected. |
+| `tari_getCapabilities` | — | `WalletCapabilities` (below). |
+| `tari_getSubstate` | `{ substateId, version? }` | the substate. |
+| `tari_getTransactionResult` | `{ transactionId }` | the result. |
+| `tari_signAndSubmitTransaction` | `{ instructions, maxFee?, inputs?, dryRun? }` | `{ transactionId, result }`. **Prompts unless `dryRun`.** |
+| `tari_createTransactionRequest` | `TransactionRequestOperation` | `{ requestId }`. **Prompts** (opens the approval popup; doesn't block on it). |
+| `tari_getTransactionRequest` | `{ requestId }` | `{ status, note, result?, error? }`. Poll until `status !== "pending"`. Survives a page reload. |
+| `tari_submitTransactionRequest` | `{ requestId }` | the operation's result. Throws unless `status === "approved"`. |
+| `tari_signOwnershipChallenge` | `{ resourceAddress, substateId, challenge }` | `{ publicKey, publicNonce, signature }` (hex). **Prompts.** Proves control of one output — see "Ownership proofs" below. |
+| `tari_signWalletOwnershipChallenge` | `{ challenge }` | `{ walletAddress, publicNonce, signature }` (hex). **Prompts.** Proves control of the wallet address itself, not tied to any output. |
+| `tari_disconnect` | — | `null`. Forgets your origin. |
+
+Prefer `tari_createTransactionRequest` over `tari_signAndSubmitTransaction` for anything new: the
+single-call method loses its result forever if the page reloads while the approval popup is open.
+The request trio persists the request wallet-side, so you resume by polling the same `requestId`.
+
+## Connecting
+
+```js
+const [account] = await window.tari.request({ method: "tari_requestAccounts" });
+```
+
+Call it in response to a user gesture (a "Connect" button). It shows an approval prompt the first
+time; afterwards it resolves without prompting while the connection stands.
+
+## Reading
+
+```js
+const balances = await window.tari.request({ method: "tari_getBalances" });
+// [{ resourceAddress, kind, symbol, name, divisibility, amount, confidentialAmount }]
+```
+
+`amount` is in **raw resource-native units**. Divide by `10 ** divisibility` to display — never
+assume 6. `kind` is `"Fungible" | "NonFungible" | "Confidential" | "Stealth"`.
+
+A `Stealth` resource holds two balances at once: `amount` is the **revealed** side (publicly
+spendable), `confidentialAmount` is the **stealth** side. Both can be non-zero. A revealed balance
+of 0 does not mean the account is empty. `confidentialAmount` reads as `"0"` — not a real balance —
+whenever the site lacks private view access; branch on `tari_getCapabilities().privateViewGranted`
+before trusting it.
+
+## Transacting
+
+```js
+const { transactionId } = await window.tari.request({
+  method: "tari_signAndSubmitTransaction",
+  params: {
+    instructions: [
+      { CallMethod: { call: { Address: account }, method: "withdraw",
+                      args: [/* resource */, /* amount */] } },
+      { PutLastInstructionOutputOnWorkspace: { key: 0 } },
+      { CallMethod: { call: { Address: target }, method: "deposit",
+                      args: [{ Workspace: { id: 0, offset: null } }] } },
+    ],
+    maxFee: "5000",
+  },
+});
+```
+
+`transactionId` here is the `Finalized.execution_result.finalize.transaction_hash` pulled out of the
+raw indexer result and normalized onto the response — every dApp built against the `transactionId`
+field the other operation kinds return (below) gets the same field on a plain `{ kind: "instructions" }`
+submission too, camelCase, not `transaction_id`.
+
+**`dryRun: true` never prompts.** Use it for quotes, previews and anything that reprices as the
+user types — a real submission is the only thing that asks for approval.
+
+```js
+const quote = await window.tari.request({
+  method: "tari_signAndSubmitTransaction",
+  params: { instructions, maxFee: "5000", dryRun: true },
+});
+```
+
+## Private spends & proof of funds
+
+These operations move value in or out of, or between, stealth (privacy-shielded) outputs. Ask for
+them through `tari_createTransactionRequest` with one of these `kind`s — **never** by hand-building
+a `StealthTransfer` instruction and passing it as `{ kind: "instructions" }`; that is rejected
+outright, because it needs a balance proof and per-input one-time authorizations only the wallet's
+own signer can produce. These kinds exist precisely so you never need to hold that material.
+
+```ts
+type TransactionRequestOperation =
+  | { kind: "instructions"; instructions: Instruction[]; maxFee?: string; inputs?: SubstateRequirement[] }
+  | { kind: "withdrawStealthAndExecute"; resourceAddress: string; amount: string;
+      workspaceVarName: string; followUpInstructions: Instruction[];
+      relatedComponents?: string[]; maxFee?: string }
+  | { kind: "redeemStealthOutputAndExecute"; resourceAddress: string; commitmentHex: string;
+      revealedAmount: string; followUpInstructions: Instruction[];
+      relatedComponents?: string[]; maxFee?: string }
+  | { kind: "redeemStealthOutputWithPrivateFee"; resourceAddress: string; commitmentHex: string;
+      revealedAmount: string; followUpInstructions: Instruction[];
+      feeResourceAddress: string; feeCommitmentHex: string; maxFee: string;
+      relatedComponents?: string[] }        // see "Paying the fee privately too" below
+  | { kind: "htlcFund"; resourceAddress: string; amount: string; claimantWalletAddress: string;
+      hashLockHex: string; refundEpoch: string; maxFee?: string }
+  | { kind: "shield"; resourceAddress: string; amount: string; maxFee?: string; memo?: string;
+      minimumValuePromise?: string }                          // see "Proof of funds" below
+  | { kind: "unshield"; resourceAddress: string; revealedAmount: string; maxFee?: string; memo?: string }
+  | { kind: "sendPrivately"; resourceAddress: string; recipientWalletAddress: string; amount: string;
+      maxFee?: string; memo?: string; minimumValuePromise?: string }  // applies to the recipient's output
+  | { kind: "htlcClaim"; resourceAddress: string; commitment: string; conditions: object[];
+      preimageHex: string; maxFee?: string }
+  | { kind: "htlcRefund"; resourceAddress: string; commitment: string; conditions: object[];
+      amount: string; outputMask: string; maxFee?: string };
+```
+
+| Kind | Moves | Result |
+|---|---|---|
+| `shield` | public → private, same account | `{ transactionId, commitment, substateId, minimumValuePromise }` |
+| `unshield` | private → public, same account | `{ transactionId }` |
+| `sendPrivately` | private → private, to another wallet address | `{ transactionId, recipientCommitment, recipientSubstateId, minimumValuePromise }` |
+| `withdrawStealthAndExecute` | your own private balance → a `Bucket` your `followUpInstructions` consume | `{ transactionId }` |
+| `redeemStealthOutputAndExecute` | one *specific* stealth output someone else sent you → a `Bucket` your `followUpInstructions` consume | `{ transactionId }` |
+| `redeemStealthOutputWithPrivateFee` | same, fee ALSO from a stealth UTXO — your address is never revealed | `{ transactionId, feeChangeCommitment }` |
+| `htlcFund` | public → HTLC-locked private output | `{ transactionId, conditions, ownCommitment, outputMask }` |
+| `htlcClaim` | HTLC-locked → your private balance | `{ transactionId }` |
+| `htlcRefund` | HTLC you funded → back to your private balance (after `refundEpoch`) | `{ transactionId }` |
+
+All of these require `capabilities.privateSpend` (or `capabilities.scriptPathSpend` for the two
+HTLC spends, `capabilities.stealthWithdraw`/`stealthRedeem`/`stealthRedeemPrivateFee` for the three
+"AndExecute"/private-fee kinds below) — a daemon-relayed account has no view secret and cannot sign
+stealth inputs. For `shield`/`unshield`/`sendPrivately` you don't choose which UTXOs get spent;
+coin selection is the wallet's own decision.
+
+### Moving stealth value into your own contract call
+
+`withdrawStealthAndExecute` and `redeemStealthOutputAndExecute` both reveal stealth value onto the
+transaction's workspace as a `Bucket`, then run `followUpInstructions` — instructions **you**
+supply — against it in the same signed transaction. Use whichever matches where the value is
+coming from:
+
+- **`withdrawStealthAndExecute`** — an `amount` drawn from the *connected wallet's own* tracked
+  private balance (the same balance `shield`/`unshield` operate on). You ask for an amount; the
+  wallet decides which of its own UTXOs cover it.
+- **`redeemStealthOutputAndExecute`** — one *specific* stealth output, identified by
+  `commitmentHex`, that some other party minted directly to the connected wallet's address —
+  a ticket, a voting ballot, a voucher. There's no balance to draw from and no coin selection:
+  you (or whatever protocol minted the token) already know the exact commitment and its exact
+  `revealedAmount`. The wallet fetches that one substate, decrypts it with the account's own view
+  secret to confirm it really belongs to the connected account, and reveals its whole value.
+  Getting `revealedAmount` wrong fails the transaction's balance proof — there's no way to
+  discover the right value except by decrypting the output yourself first, so don't guess it.
+
+The revealed bucket lands on the workspace **before** your instructions run — reference it as a
+**plain integer** `{ Workspace: { id: N, offset: null } }`, not a named `{ Workspace: "…" }` (name
+resolution only applies to instructions the wallet itself builds; your own pre-built
+`followUpInstructions` bypass it entirely). The id differs by kind:
+
+- **`redeemStealthOutputAndExecute`** / **`redeemStealthOutputWithPrivateFee`** — id **`0`**. The
+  revealed-only output bucket is the transaction's first workspace entry.
+- **`withdrawStealthAndExecute`** — id **`1`**. Drawing from the connected wallet's own balance
+  puts the account `withdraw`'s output bucket at id `0` first; the revealed amount this hands your
+  instructions is the next entry, id `1`. Using `{ id: 0 }` here fails with
+  `Encountered unknown or out of scope bucket BucketId(0)`.
+
+If your own instructions need further intermediate workspace variables, number them up from the
+next free id (`1` for the redeem kinds, `2` for `withdrawStealthAndExecute`).
+
+```js
+// redeemStealthOutputAndExecute: hand a minted ballot token straight to a voting contract.
+const { transactionId } = await window.tari.request({
+  method: "tari_createTransactionRequest",
+  params: {
+    kind: "redeemStealthOutputAndExecute",
+    resourceAddress: ballotResource,
+    commitmentHex: ballotCommitment,   // from whatever minted the ballot to you
+    revealedAmount: "1",               // the ballot's own known value
+    followUpInstructions: [
+      { CallMethod: {
+          call: { Address: electionComponent }, method: "cast_ballot",
+          args: [{ Workspace: { id: 0, offset: null } }, /* ranking */] } },
+    ],
+    relatedComponents: [electionComponent],
+    maxFee: "100000",
+  },
+});
+```
+
+`relatedComponents` must list every *other* component `followUpInstructions` touches (e.g. the
+voting contract above) — the wallet auto-registers its own account/vaults as transaction inputs,
+but has no way to know what your own instructions reference; the engine rejects an unregistered
+substate with `SubstateNotFound`.
+
+### Paying the fee privately too
+
+`redeemStealthOutputAndExecute`'s fee is paid from the connected wallet's own **revealed**
+account balance — fine for most uses, but if `followUpInstructions` itself carries something
+that would deanonymize the wallet if the fee input did (a voting ballot's ranking is the
+canonical example), a revealed fee input defeats the whole point: it signs with the wallet's
+ordinary key, linking the transaction to the account exactly as plainly as an unshielded send
+would. `redeemStealthOutputWithPrivateFee` closes that gap — the fee is paid from a **second
+stealth UTXO** instead, so the transaction never touches the wallet's account address at all.
+Confirmed live: such a transaction's on-chain substate diff contains only the two stealth UTXOs
+and whatever `relatedComponents` touch — no `component_…` belonging to the wallet appears in it
+anywhere.
+
+```js
+// redeemStealthOutputWithPrivateFee: cast a ballot with no revealed link to the voter at all.
+const { transactionId, feeChangeCommitment } = await window.tari.request({
+  method: "tari_createTransactionRequest",
+  params: {
+    kind: "redeemStealthOutputWithPrivateFee",
+    resourceAddress: ballotResource,
+    commitmentHex: ballotCommitment,
+    revealedAmount: "1",
+    followUpInstructions: [
+      { CallMethod: {
+          call: { Address: electionComponent }, method: "cast_ballot",
+          args: [{ Workspace: { id: 0, offset: null } }, /* ranking */] } },
+    ],
+    feeResourceAddress: xtrResource,
+    feeCommitmentHex: myStealthTariCommitment,  // a stealth XTR UTXO the wallet already owns
+    maxFee: "50000",                             // revealed as a flat, public fee amount
+    relatedComponents: [electionComponent],
+  },
+});
+```
+
+The fee UTXO must be a stealth output the connected wallet already owns and can decrypt (e.g.
+produced by that wallet's own `shield` against `feeResourceAddress` beforehand) — there's no way
+to conjure one from nothing. `maxFee` is revealed **publicly** as part of this transaction (a
+bucket-paid fee has no refund destination that couldn't itself link back to the wallet, so any
+unused amount is simply burned to the fee pool, not returned) — pick a flat value comfortably
+above the real cost, the same way every ballot in the transaction ends up revealing an identical
+fee regardless of its actual cost, rather than trying to compute an exact amount. The unspent
+remainder becomes a brand-new stealth output, returned as `feeChangeCommitment` — track it
+yourself to fund your next private-fee call the same way; like any other stealth output the
+wallet didn't create for its own bookkeeping, there is no way to rediscover it later if you lose
+track of it.
+
+### Proof of funds
+
+`shield` and `sendPrivately` accept `minimumValuePromise` — a public claim, committed into the new
+output's own range proof, that it is worth **at least** that much (raw resource units, decimal
+string). A confidential output normally proves `0 ≤ v < 2^64`, hiding `v` completely; with a promise
+`m` the proof instead attests `m ≤ v < 2^64`, and `m` is stored in the clear as the output's
+`minimum_value_promise`. The output becomes a self-contained, publicly verifiable proof-of-funds
+artifact — enough to build a "prove this wallet can pay X" link with no server and no cooperation
+from the wallet at verify time.
+
+```js
+// Prove this wallet can cover 100000, without revealing what it actually holds.
+const { requestId } = await window.tari.request({ method: "tari_createTransactionRequest", params: {
+  kind: "shield", resourceAddress, amount: "100000", minimumValuePromise: "100000",
+}});
+// ...poll tari_getTransactionRequest until approved, then tari_submitTransactionRequest.
+// The result carries `substateId` — that's the proof artifact. Put it in your link.
+
+// Anyone verifies it — no wallet, no signature, no live session:
+const substate = await window.tari.request({ method: "tari_getSubstate", params: { substateId } });
+// -> read `minimum_value_promise` off the output, and confirm the substate is still unspent.
+```
+
+Design around three properties:
+
+1. **Permanent and public in both directions.** The disclosure is visible to *everyone*, not only
+   whoever the proof is for, for as long as the output exists. Say so in your UI before the user
+   approves — the wallet's own approval screen already does.
+2. **It proves one output, not a balance.** "This output is worth ≥ m," not "this account holds
+   ≥ m." To prove total spending power, shield the whole amount into a single output first —
+   `tari_getPrivateBalances`'s `outputCount` shows how funds are currently split.
+3. **Spending the output destroys the proof.** Correct semantics, but it means a verifier must
+   re-check the substate is unspent at the moment they care, not merely that it once existed. Give
+   any proof you issue its own expiry.
+
+`minimumValuePromise` must not exceed the output's own `amount` — refused client-side before
+anything is signed.
+
+### Ownership proofs — proving *who* currently holds a proof of funds
+
+A `minimumValuePromise` proof is a bearer artifact: whoever has the `substateId` can present it,
+including someone it wasn't made for. It proves an output exists and is unspent — nothing about who
+is showing it to you right now. Closing that gap needs an explicit, per-verifier signature.
+
+```js
+const { requestId } = await window.tari.request({ method: "tari_createTransactionRequest", params: { … } });
+// ...after the proof exists, ask the prover's wallet to sign a challenge YOU generated:
+const { publicKey, publicNonce, signature } = await window.tari.request({
+  method: "tari_signOwnershipChallenge",
+  params: { resourceAddress, substateId, challenge: "prove-carol-2026-09-03-8f2a1c" },
+});
+```
+
+`challenge` should be something the verifier generated themselves and can recognize — a static or
+reused challenge proves nothing about *when* or *for whom* the signature was made. Prompts for
+approval; the wallet shows the challenge text verbatim before signing.
+
+`publicKey` is the output's one-time spend key. **Verify against the substate's own on-chain
+`auth.Key` (from `tari_getSubstate`), never against the `publicKey` the caller supplied** — checking
+a self-reported key proves nothing, since anyone can report any key. The actual bytes signed are not
+`challenge` alone; the wallet builds them under a domain tag (`com.tari.paylink.ownership_proof`)
+disjoint from real transaction signing (`com.tari.ootle.transaction`), so a valid signature here can
+never be replayed as spend authorization — this is also why there's no way to ask for a raw signature
+over an arbitrary message instead. Requires `capabilities.ownershipProof`.
+
+See the paylink reference dApp (`/paylink`) for a working challenge/response UI, including the
+Ristretto/Schnorr verification math (`schnorrVerify` there) a verifier needs to check the response —
+that part runs entirely client-side against public on-chain data, no wallet required.
+
+### Proving you hold a wallet address, generically
+
+`tari_signWalletOwnershipChallenge` is the same idea with no output involved — it proves the
+connected account holds its own `otl_…` wallet address, full stop:
+
+```js
+const { walletAddress, publicNonce, signature } = await window.tari.request({
+  method: "tari_signWalletOwnershipChallenge",
+  params: { challenge: "prove-carol-2026-09-03-8f2a1c" },
+});
+```
+
+Signs with the account's own persistent owner key (not a per-output derived one), under a domain
+tag (`com.tari.paylink.wallet_ownership_proof`) of its own — deliberately different from both real
+transaction signing and the per-output proof's domain, so a signature can never be mistaken for the
+wrong kind of claim. A verifier decodes the owner key from the address *they* already have in mind
+(e.g. via `parseOotleAddress`, no network call needed) and checks against that — never against
+`walletAddress` as returned, for the same self-reporting reason as `publicKey` above. Requires
+`capabilities.walletOwnershipProof`. The paylink reference dApp's "Prove you hold a wallet address" /
+"Check a wallet ownership proof" widgets are a working example of both sides.
+
+## Resource types — what "private" means depends on the resource
+
+`ResourceType` (`Fungible | NonFungible | Confidential | Stealth`) is a property of the resource
+itself, fixed at creation — not a wallet or dApp choice. Everything above (`shield`/`sendPrivately`/
+`minimumValuePromise`) works identically for **any** `Stealth`-type resource, XTR or a custom token —
+nothing in the API is XTR-specific, every call already takes `resourceAddress`.
+
+- **Fungible / NonFungible** (plain, no privacy): balances and NFT holdings are public on-chain data.
+  No wallet call is needed to read them — derive the account's component address from the wallet
+  address (`component_… = Blake2b(…, owner_key)`, same construction as `parseOotleAddress` uses
+  internally) and query the indexer's vaults directly. Combine with a
+  `tari_signWalletOwnershipChallenge` proof to attach "and this is verifiably them" to what's
+  otherwise a fully public lookup. See the paylink reference dApp's "Look up public holdings" (no
+  signature — anyone can read this) and "Check a wallet ownership proof" (adds the identity check) —
+  the latter shows both together.
+- **Stealth**: the mechanism this whole document is about — `shield`/`unshield`/`sendPrivately`,
+  `minimumValuePromise`, `tari_signOwnershipChallenge`.
+- **Confidential**: a *different* privacy mechanism — vault-based, ElGamal-encrypted to a
+  resource-specific view key, with a zero-knowledge proof that the ciphertext matches the vault's
+  Pedersen commitment. This is a closed, reveal-to-one-party model, not a public floor proof: there
+  is no "prove ≥ N to anyone" equivalent of `minimumValuePromise` for it, and this dApp/SDK surface
+  doesn't expose deposit/withdraw or balance-decryption for Confidential vaults today.
+
+## Reading private state
+
+Requires `tari_requestViewAccess` first (own prompt, read-only, never authorizes a spend) and a
+seed-derived local account. Without the grant these throw.
+
+| Method | Params | Returns |
+|---|---|---|
+| `tari_requestViewAccess` | — | `{ granted: boolean }`. **Prompts** (no-op if already granted). |
+| `tari_getViewAccess` | — | `{ granted: boolean }`. Never prompts. |
+| `tari_revokeViewAccess` | — | `null`. Idempotent. |
+| `tari_getPrivateBalances` | — | `PrivateBalance[]` — the authoritative "what can I spend privately right now," one entry per resource. |
+| `tari_getShieldedOutputs` | `{ resourceAddress? }` | `ShieldedOutputSummary[]` — the individual UTXOs, newest first. |
+| `tari_scanForPrivatePayments` | `{ maxPages? }` | `{ claimed, found }`. Real network cost — a user-initiated refresh, not a poll. |
+| `tari_scanForResourceUtxos` | `{ resourceAddress, maxPages?, pageSize?, limit? }` | `{ claimed, found }`. Like `tari_scanForPrivatePayments` but for one resource, and finds a UTXO minted by *any* instruction, not just a native `StealthTransfer` — the only way to discover a token a template mints via custom logic inside a `CallFunction`/`CallMethod` (a voting template's ballot, say). More expensive per page (fetches each candidate transaction's full result), so keep `maxPages`/`pageSize` small. Pass `limit` when the resource is known to mint at most that many outputs per account (a ballot: exactly one) to stop the walk the instant it's satisfied — check `tari_getShieldedOutputs` first, too: an output the wallet already knows about needs no scan at all. |
+| `tari_claimPrivatePayment` | `{ resourceAddress, commitment }` | `{ amount, memo? }`. Local bookkeeping only; a `sendPrivately` commitment must reach the recipient out of band first. |
+
+The grant drops on disconnect, the user switching accounts, or explicit revocation — re-check
+`capabilities.privateViewGranted` rather than assuming an earlier grant still holds.
+
+## Capabilities
+
+```js
+const caps = await window.tari.request({ method: "tari_getCapabilities" });
+if (caps.stealthWithdraw) { /* … */ } else { /* offer the plain path */ }
+```
+
+```ts
+interface WalletCapabilities {
+  exactInputSelection: boolean;      // `inputs` can pin exact substates
+  stealthWithdraw: boolean;          // withdrawStealthAndExecute
+  stealthRedeem: boolean;            // redeemStealthOutputAndExecute
+  stealthRedeemPrivateFee: boolean;  // redeemStealthOutputWithPrivateFee
+  htlcFund: boolean;                 // tari_htlcFund
+  scriptPathSpend: boolean;          // htlcClaim / htlcRefund
+  privateSpend: boolean;             // shield / unshield / sendPrivately
+  minimumValuePromise: boolean;      // proof-of-funds outputs
+  ownershipProof: boolean;           // tari_signOwnershipChallenge
+  walletOwnershipProof: boolean;     // tari_signWalletOwnershipChallenge
+  privateBalanceView: boolean;       // can this account serve confidential reads at all
+  privateViewGranted: boolean;       // has *this site* been granted them
+  transactionResultLookup: boolean;  // tari_getTransactionResult
+  transactionRequests: boolean;      // the create/get/submit request trio
+  walletAddress: boolean;            // tari_getWalletAddress
+  dryRunIsLocal: boolean;            // dry runs never leave the wallet
+}
+```
+
+This is the mechanism that replaces wallet detection. If you find yourself writing
+`if (isSapient)`, use a capability instead — both wallets answer this the same way; only the
+*connected account* changes the answer.
+
+## Errors
+
+Rejections carry a numeric `code`:
+
+| Code | Meaning | What to do |
+|---|---|---|
+| `4001` | User rejected the request | Not an error. Return to the pre-connect state quietly. |
+| `4100` | Not connected | Call `tari_requestAccounts` first. |
+| `4200` | Method unsupported by this wallet | Feature-detect with `tari_getCapabilities`. |
+| `-32603` | Internal / rejected by the network | Show `message`; it carries the chain's own reason. |
+
+```js
+try {
+  await window.tari.request({ method: "tari_signAndSubmitTransaction", params });
+} catch (e) {
+  if (e.code === 4001) return;          // user said no
+  if (e.code === 4100) return connect(); // reconnect and retry
+  throw e;
+}
+```
+
+## Events
+
+```js
+window.addEventListener("tari#initialized", () => { /* provider ready */ });
+window.tari.on?.("accountsChanged", (accounts) => { /* re-read state */ });
+```
+
+`window.tari` may not exist at parse time — the extension injects at `document_start`, the
+connector on script load. Listen for `tari#initialized` rather than reading it in a module body.
+
+## If your dApp will be embedded in Tari Universe
+
+Iframe embedding is refused if you send `X-Frame-Options: DENY|SAMEORIGIN` or a CSP
+`frame-ancestors` that excludes it. To be embeddable:
+
+```
+Content-Security-Policy: frame-ancestors 'self' https://universe.tari.mw;
+```
+
+Without it the wallet falls back to opening your dApp in a tab, where the extension provider is
+used instead if one is installed.
+
+## Pitfalls that cost real time
+
+- **You cannot build a stealth transfer yourself.** A raw `StealthTransfer` instruction passed as
+  `{ kind: "instructions" }` is rejected outright, even from a fully connected, capable account —
+  it needs a balance proof and per-input one-time authorizations only the wallet's signer can
+  produce. Use `{ kind: "shield" }` / `{ kind: "sendPrivately" }` (with `minimumValuePromise` for a
+  proof of funds) instead of assembling the instruction yourself.
+- **Wallet addresses are not component addresses.** Users hold `otl_esm_1…` (bech32m); instruction
+  arguments need `component_…`. Passing an `otl_…` where a `SubstateId` belongs fails deep in
+  deserialization as `data did not match any variant of untagged enum TransactionInput`, naming
+  neither the field nor the reason. `tari_getWalletAddress` is what you address a stealth output
+  *to*; it is not interchangeable with the component address `tari_requestAccounts` returns.
+- **An account is created on first funding.** Depositing into an account that has never received
+  anything aborts with `OneOrMoreInputsNotFound`. Creating one that already exists rejects with
+  `is already UP and conflicts with an existing output`. Check, then create only if absent.
+- **Do not pin substate versions you cached.** Let the wallet resolve them. A stale pin rejects
+  with `Lock failure: Substate …:N is not found or DOWN`.
+- **Don't prompt on every keystroke.** Price with `dryRun: true`.
+- **Amounts are strings or bigints, never JS numbers.** They exceed `Number.MAX_SAFE_INTEGER`.
+- **A `minimumValuePromise` link alone doesn't prove who's showing it to you.** It proves an output
+  exists and is unspent — it's a bearer artifact, not an identity check. Verifying that also requires
+  `tari_signOwnershipChallenge` against a challenge *you* generated, checked against the substate's
+  own on-chain `auth.Key` — never against a public key the other party supplies about themselves.
