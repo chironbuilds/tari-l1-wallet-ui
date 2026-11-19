@@ -22,6 +22,7 @@ import {
   truncMiddle,
 } from "../lib/format";
 import { isSpendable, useStore } from "../store";
+import { leasedOutputIds } from "../lib/ggbp1";
 import { useToast } from "./toast";
 import { Button, Field, Logo, TextInput } from "./ui";
 import { useI18n } from "../i18n";
@@ -62,7 +63,9 @@ export function SendPanel() {
   // Only confirmed, matured outputs we hold a handle for can be spent. The node rejects a
   // transaction that consumes an immature input, and one whose input it cannot find at all, so
   // neither locked nor pending coins may reach selection or the Max button.
-  const spendable = store.utxos.filter((u) => isSpendable(u, store.tipHeight));
+  // An output an open balance-proof request is disclosing is held back until that request ends.
+  const leased = leasedOutputIds(store.network);
+  const spendable = store.utxos.filter((u) => isSpendable(u, store.tipHeight) && !leased.has(u.id));
   const inputLikes = spendable.map((u) => ({ valueMicro: BigInt(u.valueMicro) }));
   const selection =
     amountMicro && fpg && amountMicro > 0n

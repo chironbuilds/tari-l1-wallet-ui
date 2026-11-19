@@ -78,6 +78,100 @@ export class WasmBurnBuilder {
 if (Symbol.dispose) WasmBurnBuilder.prototype[Symbol.dispose] = WasmBurnBuilder.prototype.free;
 
 /**
+ * A pending GGBP-1 proof request, bound to one wallet, one origin and one challenge.
+ *
+ * Flow: `WasmWallet.ggbp1Request` → `addCandidate` for each spendable output → `prepare` (returns
+ * the public preview the user approves) → `approve` (returns the response bytes; consumes this).
+ */
+export class WasmGgbp1Request {
+    static __wrap(ptr) {
+        const obj = Object.create(WasmGgbp1Request.prototype);
+        obj.__wbg_ptr = ptr;
+        WasmGgbp1RequestFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        WasmGgbp1RequestFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_wasmggbp1request_free(ptr, 0);
+    }
+    /**
+     * Offers one of the wallet's outputs, with the height it was mined at. Returns whether it can
+     * be disclosed; an ineligible one is ignored. The handle is only read, never kept or freed.
+     * @param {WasmWalletOutput} output
+     * @param {bigint} mined_height
+     * @returns {boolean}
+     */
+    addCandidate(output, mined_height) {
+        _assertClass(output, WasmWalletOutput);
+        const ret = wasm.wasmggbp1request_addCandidate(this.__wbg_ptr, output.__wbg_ptr, mined_height);
+        return ret !== 0;
+    }
+    /**
+     * Builds the canonical `GGBP1R` v3 response for the outputs `prepare` chose. Consumes the
+     * request, so a preparation can be approved at most once.
+     * @param {bigint} now_unix_seconds
+     * @returns {Uint8Array}
+     */
+    approve(now_unix_seconds) {
+        const ptr = this.__destroy_into_raw();
+        const ret = wasm.wasmggbp1request_approve(ptr, now_unix_seconds);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * Why `output` cannot be disclosed, or `undefined` when it can. For the wallet's own UI only.
+     * @param {WasmWalletOutput} output
+     * @returns {string | undefined}
+     */
+    ineligibleReason(output) {
+        _assertClass(output, WasmWalletOutput);
+        const ret = wasm.wasmggbp1request_ineligibleReason(this.__wbg_ptr, output.__wbg_ptr);
+        let v1;
+        if (ret[0] !== 0) {
+            v1 = getStringFromWasm0(ret[0], ret[1]).slice();
+            wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        }
+        return v1;
+    }
+    /**
+     * Picks the fewest confirmed, mature candidates (at most 16) that reach the threshold and
+     * returns the public preview as JSON. Errors with one uniform message when that is impossible.
+     * @param {bigint} tip_height
+     * @param {bigint} min_confirmations
+     * @returns {string}
+     */
+    prepare(tip_height, min_confirmations) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ret = wasm.wasmggbp1request_prepare(this.__wbg_ptr, tip_height, min_confirmations);
+            var ptr1 = ret[0];
+            var len1 = ret[1];
+            if (ret[3]) {
+                ptr1 = 0; len1 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred2_0 = ptr1;
+            deferred2_1 = len1;
+            return getStringFromWasm0(ptr1, len1);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+}
+if (Symbol.dispose) WasmGgbp1Request.prototype[Symbol.dispose] = WasmGgbp1Request.prototype.free;
+
+/**
  * A Ristretto Schnorr keypair (secret + public key).
  */
 export class WasmKeyPair {
@@ -1272,6 +1366,51 @@ export class WasmWallet {
         }
     }
     /**
+     * Opens a proof request for `challenge` (the 223 canonical bytes) from `origin`. See
+     * `request_ggbp1` for what it rejects.
+     * @param {string} origin
+     * @param {Uint8Array} challenge
+     * @param {bigint} now_unix_seconds
+     * @returns {WasmGgbp1Request}
+     */
+    ggbp1Request(origin, challenge, now_unix_seconds) {
+        const ptr0 = passStringToWasm0(origin, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray8ToWasm0(challenge, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmwallet_ggbp1Request(this.__wbg_ptr, ptr0, len0, ptr1, len1, now_unix_seconds);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return WasmGgbp1Request.__wrap(ret[0]);
+    }
+    /**
+     * This wallet's GGBP-1 subject public key for `origin` (hex). A gate puts it in its challenge
+     * as `subject_authentication_public_key`.
+     * @param {string} origin
+     * @returns {string}
+     */
+    ggbp1SubjectPublicKey(origin) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const ptr0 = passStringToWasm0(origin, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.wasmwallet_ggbp1SubjectPublicKey(this.__wbg_ptr, ptr0, len0);
+            var ptr2 = ret[0];
+            var len2 = ret[1];
+            if (ret[3]) {
+                ptr2 = 0; len2 = 0;
+                throw takeFromExternrefTable0(ret[2]);
+            }
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
+        } finally {
+            wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
      * Recovers a spendable output owned by this wallet from scanned chain data.
      *
      * The encrypted value/mask are decrypted internally (view-key and DH stealth flows), verified
@@ -1664,6 +1803,66 @@ export function commitValue(blinding_factor_hex, value) {
 }
 
 /**
+ * The commitment-generator fingerprint a challenge must carry (hex).
+ * @returns {string}
+ */
+export function ggbp1GeneratorFingerprint() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.ggbp1GeneratorFingerprint();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * `origin_hash` for `origin` (hex), as a gate computes it.
+ * @param {string} origin
+ * @returns {string}
+ */
+export function ggbp1OriginHash(origin) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(origin, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.ggbp1OriginHash(ptr0, len0);
+        var ptr2 = ret[0];
+        var len2 = ret[1];
+        if (ret[3]) {
+            ptr2 = 0; len2 = 0;
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        deferred3_0 = ptr2;
+        deferred3_1 = len2;
+        return getStringFromWasm0(ptr2, len2);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Checks a `GGBP1R` v3 response against the challenge it answers (both as canonical bytes).
+ * Cryptography only: says nothing about whether the outputs exist or are unspent on chain.
+ * @param {Uint8Array} challenge
+ * @param {Uint8Array} response
+ */
+export function ggbp1VerifyResponse(challenge, response) {
+    const ptr0 = passArray8ToWasm0(challenge, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray8ToWasm0(response, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.ggbp1VerifyResponse(ptr0, len0, ptr1, len1);
+    if (ret[1]) {
+        throw takeFromExternrefTable0(ret[0]);
+    }
+}
+
+/**
  * Returns true if the blinding factor and value open the given (hex-encoded, compressed) commitment.
  * @param {string} blinding_factor_hex
  * @param {bigint} value
@@ -1810,6 +2009,9 @@ export function __wbindgen_init_externref_table() {
 const WasmBurnBuilderFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmburnbuilder_free(ptr, 1));
+const WasmGgbp1RequestFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_wasmggbp1request_free(ptr, 1));
 const WasmKeyPairFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_wasmkeypair_free(ptr, 1));

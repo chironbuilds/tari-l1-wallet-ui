@@ -38,6 +38,37 @@ export class WasmBurnBuilder {
 }
 
 /**
+ * A pending GGBP-1 proof request, bound to one wallet, one origin and one challenge.
+ *
+ * Flow: `WasmWallet.ggbp1Request` → `addCandidate` for each spendable output → `prepare` (returns
+ * the public preview the user approves) → `approve` (returns the response bytes; consumes this).
+ */
+export class WasmGgbp1Request {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Offers one of the wallet's outputs, with the height it was mined at. Returns whether it can
+     * be disclosed; an ineligible one is ignored. The handle is only read, never kept or freed.
+     */
+    addCandidate(output: WasmWalletOutput, mined_height: bigint): boolean;
+    /**
+     * Builds the canonical `GGBP1R` v3 response for the outputs `prepare` chose. Consumes the
+     * request, so a preparation can be approved at most once.
+     */
+    approve(now_unix_seconds: bigint): Uint8Array;
+    /**
+     * Why `output` cannot be disclosed, or `undefined` when it can. For the wallet's own UI only.
+     */
+    ineligibleReason(output: WasmWalletOutput): string | undefined;
+    /**
+     * Picks the fewest confirmed, mature candidates (at most 16) that reach the threshold and
+     * returns the public preview as JSON. Errors with one uniform message when that is impossible.
+     */
+    prepare(tip_height: bigint, min_confirmations: bigint): string;
+}
+
+/**
  * A Ristretto Schnorr keypair (secret + public key).
  */
 export class WasmKeyPair {
@@ -323,6 +354,16 @@ export class WasmWallet {
      */
     getBackupHex(): string;
     /**
+     * Opens a proof request for `challenge` (the 223 canonical bytes) from `origin`. See
+     * `request_ggbp1` for what it rejects.
+     */
+    ggbp1Request(origin: string, challenge: Uint8Array, now_unix_seconds: bigint): WasmGgbp1Request;
+    /**
+     * This wallet's GGBP-1 subject public key for `origin` (hex). A gate puts it in its challenge
+     * as `subject_authentication_public_key`.
+     */
+    ggbp1SubjectPublicKey(origin: string): string;
+    /**
      * Recovers a spendable output owned by this wallet from scanned chain data.
      *
      * The encrypted value/mask are decrypted internally (view-key and DH stealth flows), verified
@@ -427,6 +468,22 @@ export function calculateFee(fee_per_gram_micro: bigint, num_kernels: number, nu
  * Creates a compressed Pedersen commitment for `value` (in micro-Minotari) under the given blinding factor.
  */
 export function commitValue(blinding_factor_hex: string, value: bigint): string;
+
+/**
+ * The commitment-generator fingerprint a challenge must carry (hex).
+ */
+export function ggbp1GeneratorFingerprint(): string;
+
+/**
+ * `origin_hash` for `origin` (hex), as a gate computes it.
+ */
+export function ggbp1OriginHash(origin: string): string;
+
+/**
+ * Checks a `GGBP1R` v3 response against the challenge it answers (both as canonical bytes).
+ * Cryptography only: says nothing about whether the outputs exist or are unspent on chain.
+ */
+export function ggbp1VerifyResponse(challenge: Uint8Array, response: Uint8Array): void;
 
 /**
  * Returns true if the blinding factor and value open the given (hex-encoded, compressed) commitment.

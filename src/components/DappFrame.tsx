@@ -2,7 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { decodeSubstateResponse, decodeTransactionResultResponse } from "../lib/bor";
 import { createPortal } from "react-dom";
 import { ExternalLink, Eye, Maximize2, Minimize2, ShieldAlert, ShieldCheck, X } from "lucide-react";
-import { useStore } from "../store";
+import { isSpendable, useStore } from "../store";
+import { ggbp1GeneratorFingerprint, ggbp1OriginHash, type WasmGgbp1Request } from "@chironbuilder/tari-l1-wasm";
+import {
+  GGBP1_CHALLENGE_BYTES,
+  GGBP1_GENESIS_HASH,
+  GGBP1_MIN_CONFIRMATIONS,
+  fromBase64Url,
+  ggbp1Capability,
+  leaseOutputs,
+  leasedOutputIds,
+  previewSummary,
+  takeRequestSlot,
+  toBase64Url,
+  type Ggbp1Preview,
+} from "../lib/ggbp1";
 import {
   type BridgeMethod,
   type BridgeRequest,
@@ -55,7 +69,13 @@ interface ApprovalState {
   /** Which dialog voice to use. "connect" and "view" are permission grants — nothing is spent, so
    * the "this spends real funds" warning would be false and, worse, would train users to ignore it
    * where it is true. "spend" is everything that moves value. */
-  tone: "connect" | "view" | "spend" | "network";
+  tone: "connect" | "view" | "spend" | "network" | "proof";
+  /** Nothing to approve: the dialog only explains why and offers to close (a balance proof this
+   * wallet cannot make). */
+  blocked?: boolean;
+  /** Overrides the tone's own heading and approve label. */
+  title?: string;
+  approveLabel?: string;
   /** An extra warning shown in its own box (a network switch onto MainNet's real-money notice). */
   notice?: string;
   /** Present only for a transaction request (every `REQUEST_METHODS` operation). `enforced: true`
@@ -231,6 +251,9 @@ export function DappFrame({
         notice?: string;
         summary?: string[];
         feeChoice?: ApprovalState["feeChoice"];
+        blocked?: boolean;
+        title?: string;
+        approveLabel?: string;
         /** Simulates the request once its dialog is showing; `null` = nothing to preview. */
         previewer?: () => Promise<PreviewLines | null>;
       } = {},
@@ -246,6 +269,9 @@ export function DappFrame({
               summary: options.summary ?? describeRequest(method, params),
               tone: options.tone ?? "spend",
               notice: options.notice,
+              blocked: options.blocked,
+              title: options.title,
+              approveLabel: options.approveLabel,
               feeChoice: options.feeChoice,
               preview: options.previewer ? "loading" : undefined,
               decide: (approved) => {
@@ -457,7 +483,7 @@ export function DappFrame({
             };
           }
           case "tari_getCapabilities":
-            return { result: capabilitiesFor(origin) };
+            return { result: capabilitiesFor(origin, ggbp1Capability(s.network, !!s.wallet?.canSpend)) };
           case "tari_getSubstate": {
             const provider = await account.getProvider();
             return {
@@ -658,6 +684,124 @@ export function DappFrame({
           return { result };
         } catch (e) {
           return { error: ERROR.internal(e instanceof Error ? e.message : String(e)) };
+        }
+      }
+
+      // GGBP-1 v3 balance proofs over this wallet's L1 outputs (experimental). Every secret and every
+      // signed byte stays in the wasm; this side checks the site, the clock, the lock and the
+      // limits, and shows the user exactly which outputs would be disclosed.
+      if (req.method === "tari_getBalanceProofSubject" || req.method === "tari_requestBalanceProof") {
+        if (!connectedRef.current || !origin) return { error: ERROR.unauthorized };
+        const capability = ggbp1Capability(s.network, !!s.wallet?.canSpend);
+        if (!capability || !s.network) return { error: ERROR.unsupported(req.method) };
+        const wallet = s.wallet;
+        if (!wallet || s.walletLocked) return { error: ERROR.internal("The wallet is locked.") };
+
+        if (req.method === "tari_getBalanceProofSubject") {
+          const approved = await askUser(req.id, req.method, params, {
+            tone: "proof",
+            title: t("frame.askProofKey"),
+            approveLabel: t("frame.shareProofKey"),
+          });
+          if (!approved) return { error: ERROR.rejected };
+          const current = storeRef.current.wallet;
+          if (!current || storeRef.current.walletLocked) return { error: ERROR.internal("The wallet is locked.") };
+          try {
+            return {
+              result: {
+                protocol: "ggbp1",
+                version: 3,
+                network: capability.network,
+                genesisHash: GGBP1_GENESIS_HASH[capability.network],
+                originHash: ggbp1OriginHash(origin),
+                subjectPublicKey: current.ggbp1SubjectPublicKey(origin),
+                commitmentGeneratorFingerprint: ggbp1GeneratorFingerprint(),
+              },
+            };
+          } catch (e) {
+            return { error: ERROR.internal(e instanceof Error ? e.message : String(e)) };
+          }
+        }
+
+        if (params.protocol !== "ggbp1" || params.version !== 3) {
+          return { error: ERROR.internal('Only { protocol: "ggbp1", version: 3 } is supported.') };
+        }
+        const challenge = fromBase64Url(String(params.challenge ?? ""));
+        if (!challenge || challenge.length !== GGBP1_CHALLENGE_BYTES) {
+          return { error: ERROR.internal("challenge must be the 223-byte GGBP-1 v3 challenge, base64url without padding.") };
+        }
+        // A request from a tab the user is not looking at is refused, not queued.
+        if (document.visibilityState !== "visible") return { error: ERROR.rejected };
+        const releaseSlot = takeRequestSlot(origin);
+        if (!releaseSlot) return { error: ERROR.rejected };
+        let request: WasmGgbp1Request | null = null;
+        let releaseLease: (() => Promise<void>) | null = null;
+        try {
+          const tip = s.tipHeight;
+          if (tip === null) return { error: ERROR.internal("The wallet does not know the chain tip yet. Try again shortly.") };
+          try {
+            request = wallet.ggbp1Request(origin, challenge, BigInt(Math.floor(Date.now() / 1000)));
+          } catch (e) {
+            // About the challenge itself (wrong site, network, subject, expired): safe to explain.
+            return { error: ERROR.internal(e instanceof Error ? e.message : String(e)) };
+          }
+          const leased = leasedOutputIds(s.network);
+          for (const u of s.utxos) {
+            if (!u.minedHeight || leased.has(u.id) || !isSpendable(u, tip)) continue;
+            const handle = s.getHandle(u.id);
+            if (handle) request.addCandidate(handle, BigInt(u.minedHeight));
+          }
+          let preview: Ggbp1Preview | null = null;
+          try {
+            preview = JSON.parse(request.prepare(BigInt(tip), BigInt(GGBP1_MIN_CONFIRMATIONS))) as Ggbp1Preview;
+          } catch {
+            preview = null;
+          }
+          if (!preview) {
+            // The user is told why; the site only ever sees the same "rejected" as a refusal, so it
+            // cannot tell "not enough" from "no".
+            await askUser(req.id, req.method, params, {
+              tone: "proof",
+              blocked: true,
+              summary: [t("frame.ggbp1CannotProve")],
+            });
+            return { error: ERROR.rejected };
+          }
+          releaseLease = await leaseOutputs(
+            s.network,
+            preview.outputs.map((o) => o.commitment),
+            req.id,
+            origin,
+            preview.expiresAt * 1000,
+          );
+          if (!releaseLease) return { error: ERROR.rejected };
+          const approved = await askUser(req.id, req.method, params, {
+            tone: "proof",
+            summary: previewSummary(preview),
+            notice: t("frame.ggbp1Linkability"),
+          });
+          if (!approved) return { error: ERROR.rejected };
+          // Re-check everything that could have changed while the dialog was open.
+          const now = storeRef.current;
+          if (!connectedRef.current) return { error: ERROR.unauthorized };
+          if (document.visibilityState !== "visible" || now.walletLocked || now.wallet !== wallet) {
+            return { error: ERROR.rejected };
+          }
+          const stillSpendable = preview.outputs.every((o) => {
+            const u = now.utxos.find((x) => x.id === o.commitment);
+            return !!u && isSpendable(u, now.tipHeight);
+          });
+          if (!stillSpendable) return { error: ERROR.internal("One of those outputs was spent meanwhile. Ask again.") };
+          const consumed = request;
+          request = null; // approve() consumes it
+          const response = consumed.approve(BigInt(Math.floor(Date.now() / 1000)));
+          return { result: { protocol: "ggbp1", version: 3, response: toBase64Url(response) } };
+        } catch (e) {
+          return { error: ERROR.internal(e instanceof Error ? e.message : String(e)) };
+        } finally {
+          request?.free();
+          if (releaseLease) await releaseLease();
+          releaseSlot();
         }
       }
 
@@ -876,13 +1020,16 @@ export function DappFrame({
               style={{ borderColor: "var(--tari-border)", background: "var(--tari-bg-panel)" }}
             >
               <p className="text-sm font-bold text-[var(--tari-text)]">
-                {approval.tone === "connect"
+                {approval.title ??
+                  (approval.tone === "connect"
                   ? t("frame.askConnect")
                   : approval.tone === "view"
                     ? t("frame.askView")
                     : approval.tone === "network"
                       ? t("frame.askSwitchNetwork")
-                      : t("frame.askApprove")}
+                      : approval.tone === "proof"
+                        ? t("frame.askProof")
+                        : t("frame.askApprove"))}
               </p>
               <p className="mt-1 font-mono text-[11px] break-all text-[var(--tari-text-dim)]">
                 {origin}
@@ -956,23 +1103,33 @@ export function DappFrame({
                   {t("frame.viewWarning")}
                 </p>
               )}
+              {approval.tone === "proof" && !approval.blocked && (
+                <p className="mt-4 rounded-xl border border-[var(--tari-border)] bg-[var(--tari-bg-input)] p-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
+                  {t("frame.ggbp1NothingMoves")}
+                </p>
+              )}
               {approval.notice && (
                 <p className="mt-4 rounded-xl border border-[var(--st-amber)]/30 bg-[var(--st-amber)]/10 p-2.5 text-[11px] leading-relaxed text-[var(--tari-text)]">
                   {approval.notice}
                 </p>
               )}
               <div className="mt-4 flex gap-2.5">
-                <Button className="flex-1" disabled={!approveArmed} onClick={() => approveArmed && approval.decide(true)}>
-                  {approval.tone === "connect"
-                    ? t("frame.connect")
-                    : approval.tone === "view"
-                      ? t("frame.showBalance")
-                      : approval.tone === "network"
-                        ? t("frame.switchNetwork")
-                        : t("frame.approve")}
-                </Button>
+                {!approval.blocked && (
+                  <Button className="flex-1" disabled={!approveArmed} onClick={() => approveArmed && approval.decide(true)}>
+                    {approval.approveLabel ??
+                      (approval.tone === "connect"
+                      ? t("frame.connect")
+                      : approval.tone === "view"
+                        ? t("frame.showBalance")
+                        : approval.tone === "network"
+                          ? t("frame.switchNetwork")
+                          : approval.tone === "proof"
+                            ? t("frame.proveBalance")
+                            : t("frame.approve"))}
+                  </Button>
+                )}
                 <Button variant="outline" className="flex-1" onClick={() => approval.decide(false)}>
-                  {approval.tone === "spend" ? t("frame.reject") : t("frame.deny")}
+                  {approval.blocked ? t("frame.close") : approval.tone === "spend" ? t("frame.reject") : t("frame.deny")}
                 </Button>
               </div>
             </div>
