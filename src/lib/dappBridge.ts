@@ -159,6 +159,9 @@ export function capabilitiesFor(origin: string | null) {
     /** `tari_signWalletOwnershipChallenge` — proves control of the wallet address itself, not tied
      * to any particular output. */
     walletOwnershipProof: true,
+    /** GGBP-1 v3 is unavailable. Requests for its proposed method receive `4200`; see
+     * `docs/GGBP1_GHOST_GATE_HANDOFF.md` for the complete security and capability rationale. */
+    ggbp1BalanceProof: false as const,
     /** The `depositConfidential` transaction-request kind — moves revealed balance into a
      * Confidential-type vault, a different privacy mechanism from the Stealth surface above. */
     confidentialDeposit: true,
@@ -171,6 +174,16 @@ export function capabilitiesFor(origin: string | null) {
 }
 
 export type BridgeCapabilities = ReturnType<typeof capabilitiesFor>;
+
+/**
+ * Compile-time guard, no runtime code: `ggbp1BalanceProof` must stay the literal `false` until a
+ * reviewed GGBP-1 v3 wallet prover and independent chain verifier exist. Setting it to `true`, or
+ * widening it to `boolean`, fails `npm run typecheck` here.
+ */
+type Ggbp1MustStayDisabled<T extends false> = T;
+// Exporting this type keeps the compile-time guard live under `noUnusedLocals`: changing the
+// capability to `true` or `boolean` violates the `false` constraint during typechecking.
+export type Ggbp1BalanceProofDisabled = Ggbp1MustStayDisabled<BridgeCapabilities["ggbp1BalanceProof"]>;
 
 /* ---------------------------------------------------------------------------------------------
  * `minimumValuePromise` (on the `shield` and `sendPrivately` operation kinds)
