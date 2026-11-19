@@ -3,6 +3,7 @@ import type { Dictionary } from "./index";
 
 const zh: Dictionary = {
   common: {
+    byErebus: "Erebus Lab 出品",
     language: "语言",
     copy: "复制",
     copied: "已复制",

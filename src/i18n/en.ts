@@ -2,6 +2,7 @@
 // screens. `{name}` placeholders are filled by `t(key, { name })`.
 const en = {
   common: {
+    byErebus: "by Erebus Lab",
     language: "Language",
     copy: "Copy",
     copied: "Copied",

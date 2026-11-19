@@ -162,10 +162,13 @@ export function Dashboard() {
             boxShadow: "var(--tari-shadow)",
           }}
         >
-          <div className="hidden md:block">
+          <div className="hidden md:flex md:flex-col md:items-center md:gap-1.5">
             <button className="un-rail-btn" title={t("dash.settings")} onClick={() => openPanel("settings")}>
               <Logo size={30} />
             </button>
+            <span className="text-center text-[8.5px] font-semibold uppercase leading-[1.25] tracking-[0.03em] text-zinc-500">
+              {t("common.byErebus")}
+            </span>
           </div>
 
           <div className="flex flex-row items-center gap-1 md:flex-col md:gap-2.5">

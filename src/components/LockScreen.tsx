@@ -86,6 +86,7 @@ export function LockScreen() {
           {t("lock.forgot")}
         </button>
       </Card>
+      <p className="mt-5 text-[11px] font-medium tracking-[0.08em] text-zinc-500 uppercase">{t("common.byErebus")}</p>
     </div>
   );
 }

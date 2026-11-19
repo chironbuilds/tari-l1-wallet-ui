@@ -756,6 +756,9 @@ function SettingsContent() {
         </div>
       </Card>
 
+      <p className="text-center text-[11px] font-medium tracking-[0.08em] text-zinc-500 uppercase lg:col-span-2">
+        {t("welcome.title")} · {t("common.byErebus")}
+      </p>
       {/* CPAL-1.0 Exhibit B attribution: deployments of this code keep this notice visible. */}
       <p className="text-center text-[11px] text-zinc-500 lg:col-span-2">
         Built on the Tari L1 Web Wallet by chironbuilds · Copyright (c) 2026 chironbuilds ·{" "}
