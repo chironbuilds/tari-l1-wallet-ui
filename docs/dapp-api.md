@@ -7,6 +7,10 @@ published by `public/tari-connector.js`:
 <script src="https://universe.tari.mw/tari-connector.js"></script>
 ```
 
+`window.TARI_WALLETCONNECT = {}` is enough to try it: without a `projectId` the connector uses a shared
+project. For production, bring your own (free at cloud.reown.com) and add your domain to its allowed
+domains: you get your own relay quota, and Sapient shows your site as verified instead of unverified.
+
 Every method is callable two ways — `window.tari.request({ method, params })` (identical to the
 Sapient browser extension's provider) or the named sugar (`window.tari.getPrivateBalances()`). They
 are the same call.
@@ -36,7 +40,7 @@ the Sapient app on their phone. Set this **before** loading the connector:
 ```html
 <script>
   window.TARI_WALLETCONNECT = {
-    projectId: "<your Reown project id>",   // free at cloud.reown.com
+    // projectId: "<your Reown project id>", // optional; free at cloud.reown.com (see below)
     network: "mainnet",                     // or "esmeralda"; Sapient refuses a different network
     // metadata: { name, description, url, icons }   // optional; defaults from the page
   };

@@ -36,7 +36,8 @@
  * also works outside a wallet: the first call shows a QR code (desktop) or an "Open Sapient" button
  * (phone), and once the user approves in the app every call goes over WalletConnect, unchanged:
  *
- *   <script>window.TARI_WALLETCONNECT = { projectId: "<your Reown project id>", network: "mainnet" };</script>
+ *   <script>window.TARI_WALLETCONNECT = { network: "mainnet" };</script>
+ *   (add projectId: "<your Reown project id>" in production; a shared one is used if omitted)
  *   <script src="https://universe.tari.mw/tari-connector.js"></script>
  *
  * Without that setting nothing about this script's behaviour changes. A wallet that is present always
@@ -128,7 +129,7 @@
     if (wcTransport) return wcTransport;
     wcTransport = new Promise(function (resolve, reject) {
       var s = document.createElement("script");
-      s.src = SCRIPT_BASE + "tari-connector-wc.js?v=3";
+      s.src = SCRIPT_BASE + "tari-connector-wc.js?v=6";
       s.async = true;
       s.onload = function () {
         try {

@@ -1,6 +1,6 @@
 // tari-connector-wc.js -- the opt-in WalletConnect transport for tari-connector.js.
 //
-// Loaded by tari-connector.js only when a dApp sets `window.TARI_WALLETCONNECT = { projectId }`
+// Loaded by tari-connector.js only when a dApp sets `window.TARI_WALLETCONNECT = {}` (projectId optional)
 // and runs outside a Tari wallet (no extension, not embedded in Universe). It pairs with Sapient for
 // Android over WalletConnect v2 and carries the very same `tari_*` requests, so the dApp's code is
 // unchanged. The pairing UI (QR on desktop, "Open Sapient" on a phone) lives in a Shadow DOM so a
@@ -44,8 +44,12 @@ const METHODS = [
 const EVENTS = ["accountsChanged", "networkChanged"];
 const NETWORKS = ["mainnet", "esmeralda", "igor"];
 
+// Shared Reown project id used when a dApp doesn't bring its own. Fine for trying things out; in production a
+// dApp should pass its own projectId so it gets its own relay quota and Reown Verify can mark its domain verified.
+const DEFAULT_PROJECT_ID = "8bb31c50def7dc5a660461ff56b86588";
+
 interface Config {
-  projectId: string;
+  projectId?: string;
   network?: string;
   metadata?: { name: string; description: string; url: string; icons: string[] };
   relayUrl?: string;
@@ -242,9 +246,8 @@ function openWaiting(method: string): Waiting {
 
 // ---------------- transport ----------------
 function create(config: Config) {
-  if (!config || typeof config.projectId !== "string" || !config.projectId) {
-    throw new Error("TARI_WALLETCONNECT needs a projectId (create one at cloud.reown.com).");
-  }
+  config = config && typeof config === "object" ? config : {};
+  const projectId = typeof config.projectId === "string" && config.projectId ? config.projectId : DEFAULT_PROJECT_ID;
   const network = NETWORKS.includes(config.network ?? "") ? config.network! : "mainnet";
   let chain = `${NAMESPACE}:${network}`;
   let provider: Awaited<ReturnType<typeof UniversalProvider.init>> | null = null;
@@ -264,7 +267,7 @@ function create(config: Config) {
   async function init() {
     if (provider) return provider;
     provider = await UniversalProvider.init({
-      projectId: config.projectId,
+      projectId,
       metadata: config.metadata ?? defaultMetadata(),
       relayUrl: config.relayUrl,
     });
@@ -272,10 +275,49 @@ function create(config: Config) {
     provider.on("session_event", (e: { params: { event: { name: string; data: unknown } } }) => {
       const { name, data } = e.params.event;
       if (name === "networkChanged" && typeof data === "string" && NETWORKS.includes(data)) chain = `${NAMESPACE}:${data}`;
+      if (name === "accountsChanged") forgetAddress();
       if (EVENTS.includes(name)) emit(name, data);
     });
-    provider.on("session_delete", () => emit("disconnect", null));
+    provider.on("session_delete", () => {
+      forgetAddress();
+      emit("disconnect", null);
+    });
     return provider;
+  }
+
+  // Read-only answers the session already holds. A phone wallet is usually in the background when the page
+  // reloads, and it may not answer until it is opened again; a page reconnecting quietly shouldn't wait on that.
+  const ADDRESS_KEY = "tari.wc.walletAddress";
+  function sessionAccounts(p: InstanceType<typeof UniversalProvider>): string[] {
+    const all: string[] = p.session?.namespaces?.[NAMESPACE]?.accounts ?? [];
+    const here = all.filter((a) => a.startsWith(`${chain}:`));
+    return (here.length ? here : all).map((a) => a.split(":").slice(2).join(":"));
+  }
+  function sessionChain(p: InstanceType<typeof UniversalProvider>): string | null {
+    const chains: string[] = p.session?.namespaces?.[NAMESPACE]?.chains ?? [];
+    return chains.includes(chain) ? chain : chains[0] ?? null;
+  }
+  function cachedAddress(topic: string): string | null {
+    try {
+      const v = JSON.parse(localStorage.getItem(ADDRESS_KEY) ?? "null") as { topic: string; account: string; address: string } | null;
+      return v && v.topic === topic && v.account === (provider ? sessionAccounts(provider)[0] : "") ? v.address : null;
+    } catch {
+      return null;
+    }
+  }
+  function rememberAddress(topic: string, address: string): void {
+    try {
+      localStorage.setItem(ADDRESS_KEY, JSON.stringify({ topic, account: provider ? sessionAccounts(provider)[0] : "", address }));
+    } catch {
+      /* asked again next time */
+    }
+  }
+  function forgetAddress(): void {
+    try {
+      localStorage.removeItem(ADDRESS_KEY);
+    } catch {
+      /* nothing kept */
+    }
   }
 
   async function connect() {
@@ -343,12 +385,33 @@ function create(config: Config) {
     },
     async request(method: string, params: unknown) {
       if (method === "tari_disconnect") {
+        forgetAddress();
         if (provider?.session) await provider.disconnect();
         emit("disconnect", null);
         return null;
       }
+      // Never prompts, as documented: with no session (none restored from storage either), report
+      // "not connected" instead of opening the pairing dialog. A page checks these on load to reconnect
+      // quietly; a QR code popping up there would be a surprise.
+      if (method === "tari_getAccounts" || method === "tari_getNetwork") {
+        const p = await init();
+        if (!p.session) return method === "tari_getAccounts" ? [] : chain.slice(NAMESPACE.length + 1);
+        // Answered from the session (kept current by the wallet's session updates), not a round trip.
+        if (method === "tari_getAccounts") {
+          const accounts = sessionAccounts(p);
+          if (accounts.length) return accounts;
+        } else {
+          const c = sessionChain(p);
+          if (c) return c.slice(NAMESPACE.length + 1);
+        }
+      }
+      if (method === "tari_getWalletAddress" && provider?.session) {
+        const hit = cachedAddress(provider.session.topic);
+        if (hit) return hit;
+      }
       await connect();
       const result = await requestWithFeedback(method, params);
+      if (method === "tari_getWalletAddress" && typeof result === "string" && provider?.session) rememberAddress(provider.session.topic, result);
       // An approved switch answers with the new network; follow it so the next call targets it.
       if (method === "tari_switchNetwork" && typeof result === "string" && NETWORKS.includes(result)) chain = `${NAMESPACE}:${result}`;
       return result;

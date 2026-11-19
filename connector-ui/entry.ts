@@ -1,6 +1,6 @@
 // tari-connect.js -- a drop-in "Connect wallet" picker for Tari dApps.
 //
-//   <script>window.TARI_WALLETCONNECT = { projectId: "…", network: "mainnet" };</script>   (optional)
+//   <script>window.TARI_WALLETCONNECT = { network: "mainnet" };</script>   (optional; projectId optional too)
 //   <script src="https://universe.tari.mw/tari-connector.js"></script>
 //   <script src="https://universe.tari.mw/tari-connect.js"></script>
 //
