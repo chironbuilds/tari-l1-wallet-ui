@@ -325,6 +325,26 @@
       return request("tari_signWalletOwnershipChallenge", { challenge: challenge });
     },
 
+    /**
+     * GGBP-1 v3 balance proofs (experimental; check `getCapabilities().ggbp1BalanceProof` first).
+     *
+     * `getBalanceProofSubject()` asks the user once to hand this site its per-site subject key and
+     * resolves `{ protocol, version, network, genesisHash, originHash, subjectPublicKey,
+     * commitmentGeneratorFingerprint }` -- everything a gate needs to issue a challenge.
+     *
+     * `requestBalanceProof(challenge)` takes the gate's 223-byte challenge as unpadded base64url and
+     * resolves `{ protocol: "ggbp1", version: 3, response }` (base64url `GGBP1R` v3 bytes). The user
+     * sees exactly which outputs are disclosed. A refusal and "not enough" both reject with 4001.
+     * The response proves the cryptography only: the gate must still check on chain that the
+     * outputs exist and are unspent.
+     */
+    getBalanceProofSubject: function () {
+      return request("tari_getBalanceProofSubject", {});
+    },
+    requestBalanceProof: function (challenge) {
+      return request("tari_requestBalanceProof", { protocol: "ggbp1", version: 3, challenge: challenge });
+    },
+
     createTransactionRequest: function (operation) { return request("tari_createTransactionRequest", operation); },
     getTransactionRequest: function (requestId) { return request("tari_getTransactionRequest", { requestId: requestId }); },
     submitTransactionRequest: function (requestId) { return request("tari_submitTransactionRequest", { requestId: requestId }); },

@@ -12,6 +12,7 @@
  * enciphered seed lives.
  */
 
+import type { Ggbp1Capability } from "./ggbp1";
 import { summarizeInstructionArray } from "../ootle/instructionSummary";
 import { t } from "../i18n";
 
@@ -59,6 +60,10 @@ export type BridgeMethod =
   // ---- Ownership proof (spends nothing) ----
   | "tari_signOwnershipChallenge"
   | "tari_signWalletOwnershipChallenge"
+  // GGBP-1 v3 balance proofs (experimental; see docs/ggbp1/WALLET_INTEGRATION.md). Not extension
+  // methods: Sapient answers them 4200, and `ggbp1BalanceProof` says which wallet can.
+  | "tari_getBalanceProofSubject"
+  | "tari_requestBalanceProof"
   | "tari_disconnect";
 
 /** Answerable without a connection, matching the extension (any page may ask the network, and may
@@ -120,7 +125,7 @@ export const REQUEST_METHODS: BridgeMethod[] = [
  * are fixed here — unlike the extension, which also serves daemon-relayed accounts that hold no
  * view secret, every account in this wallet is seed-derived and can do the whole stealth surface.
  */
-export function capabilitiesFor(origin: string | null) {
+export function capabilitiesFor(origin: string | null, ggbp1: Ggbp1Capability | false = false) {
   return {
     exactInputSelection: true,
     stealthWithdraw: true,
@@ -159,9 +164,12 @@ export function capabilitiesFor(origin: string | null) {
     /** `tari_signWalletOwnershipChallenge` — proves control of the wallet address itself, not tied
      * to any particular output. */
     walletOwnershipProof: true,
-    /** GGBP-1 v3 is unavailable. Requests for its proposed method receive `4200`; see
-     * `docs/GGBP1_GHOST_GATE_HANDOFF.md` for the complete security and capability rationale. */
-    ggbp1BalanceProof: false as const,
+    /** GGBP-1 v3 aggregate-threshold balance proofs over this wallet's L1 outputs
+     * (`tari_getBalanceProofSubject`, `tari_requestBalanceProof`): the protocol parameters when
+     * available, `false` otherwise (another network, a view-only wallet). Experimental, Esmeralda
+     * only. A valid proof shows nothing about whether the outputs are still unspent: the relying
+     * party must check that on chain itself. See `docs/ggbp1/WALLET_INTEGRATION.md`. */
+    ggbp1BalanceProof: ggbp1 as Ggbp1Capability | false,
     /** The `depositConfidential` transaction-request kind — moves revealed balance into a
      * Confidential-type vault, a different privacy mechanism from the Stealth surface above. */
     confidentialDeposit: true,
@@ -175,15 +183,6 @@ export function capabilitiesFor(origin: string | null) {
 
 export type BridgeCapabilities = ReturnType<typeof capabilitiesFor>;
 
-/**
- * Compile-time guard, no runtime code: `ggbp1BalanceProof` must stay the literal `false` until a
- * reviewed GGBP-1 v3 wallet prover and independent chain verifier exist. Setting it to `true`, or
- * widening it to `boolean`, fails `npm run typecheck` here.
- */
-type Ggbp1MustStayDisabled<T extends false> = T;
-// Exporting this type keeps the compile-time guard live under `noUnusedLocals`: changing the
-// capability to `true` or `boolean` violates the `false` constraint during typechecking.
-export type Ggbp1BalanceProofDisabled = Ggbp1MustStayDisabled<BridgeCapabilities["ggbp1BalanceProof"]>;
 
 /* ---------------------------------------------------------------------------------------------
  * `minimumValuePromise` (on the `shield` and `sendPrivately` operation kinds)
@@ -605,6 +604,8 @@ export function describeRequest(method: BridgeMethod, params: Record<string, unk
         ...instructions,
       ];
     }
+    case "tari_getBalanceProofSubject":
+      return [t("approve.ggbp1Subject"), t("approve.ggbp1SubjectLink"), t("approve.noKeys")];
     default:
       return [method];
   }

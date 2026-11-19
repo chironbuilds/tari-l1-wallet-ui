@@ -1,8 +1,10 @@
 # GGBP-1 v3 / Ghost Gate integration handoff
 
-> **Status: experimental and disabled.** This wallet reports `ggbp1BalanceProof: false` and has no
-> GGBP-1 method. Nothing in this document is implemented in the Tari L1 Web Wallet, and nothing here
-> authorizes any access. **A cryptographically valid GGBP1R v3 response does not show that anyone
+> **Status update (2026-11-20): implemented, experimental, Esmeralda only.** The wallet-owned prover,
+> output eligibility, foreground approval, rate limits and output leases described below now exist;
+> see [`docs/ggbp1/WALLET_INTEGRATION.md`](ggbp1/WALLET_INTEGRATION.md) for what was built and the
+> encodings it defines. The rest of this document is the original handoff, kept as written. Nothing
+> here authorizes any access. **A cryptographically valid GGBP1R v3 response does not show that anyone
 > holds spendable Tari outputs.** Real wallet signing and production chain authorization are
 > separate security gates. Neither is opened by this document.
 

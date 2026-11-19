@@ -18,6 +18,7 @@ import {
   type BurnRecord,
 } from "../lib/burn";
 import { isSpendable, useStore } from "../store";
+import { leasedOutputIds } from "../lib/ggbp1";
 import { useToast } from "./toast";
 import { Button, CopyButton, Field, Logo, Segmented, TextInput, cn } from "./ui";
 import { BurnAnimation } from "./BurnAnimation";
@@ -76,7 +77,9 @@ export function BurnPanel() {
   const claimKeyValid = !!claimKey && /^[0-9a-f]{64}$/.test(claimKey);
   const otherError = other.error ? t(other.error) : null;
 
-  const spendable = store.utxos.filter((u) => isSpendable(u, store.tipHeight));
+  // An output an open balance-proof request is disclosing is held back until that request ends.
+  const leased = leasedOutputIds(store.network);
+  const spendable = store.utxos.filter((u) => isSpendable(u, store.tipHeight) && !leased.has(u.id));
   const inputLikes = spendable.map((u) => ({ valueMicro: BigInt(u.valueMicro) }));
   const selection = amountMicro && fpg && amountMicro > 0n ? selectInputs(inputLikes, amountMicro, fpg) : null;
   const maxSpend = fpg ? estimateMaxSpend(inputLikes, fpg) : 0n;
